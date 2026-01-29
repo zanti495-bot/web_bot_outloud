@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head><title>Рассылка</title><link rel="stylesheet" href="/static/admin.css"></head>
+<body class="dark-theme">
+    <h1>Рассылка всем пользователям</h1>
+    <form method="post" enctype="multipart/form-data">
+        <textarea name="text" placeholder="Текст сообщения (поддержка Markdown)" rows="10" cols="50"></textarea><br><br>
+        <input type="file" name="media" accept="image/*,video/*,application/*"><br><br>
+        <button>Отправить рассылку</button>
+    </form>
+    <a href="{{ url_for('dashboard') }}">Назад</a>
+</body>
+</html>

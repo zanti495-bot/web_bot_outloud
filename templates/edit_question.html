@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head><title>Редактировать вопрос</title><link rel="stylesheet" href="/static/admin.css"></head>
+<body class="dark-theme">
+    <h1>Редактировать вопрос</h1>
+    <form method="post">
+        <textarea name="text" required>{{ question.text }}</textarea><br><br>
+        <input type="number" name="sort_order" value="{{ question.sort_order }}"><br><br>
+        <button>Сохранить</button>
+    </form>
+    <a href="{{ url_for('questions', block_id=question.block_id) }}">Назад</a>
+</body>
+</html>

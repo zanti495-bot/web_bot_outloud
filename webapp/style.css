@@ -1,0 +1,30 @@
+body {
+    font-family: Arial, sans-serif; /* Динамически меняется */
+    background-color: #FFFFFF; /* Динамически */
+    color: #000000; /* Динамически */
+    margin: 0;
+    padding: 20px;
+}
+
+#menu ul {
+    list-style: none;
+    padding: 0;
+}
+
+#menu li {
+    margin: 10px 0;
+}
+
+.card {
+    border: 1px solid #ccc;
+    padding: 20px;
+    margin: 20px;
+    font-size: 24px;
+    text-align: center;
+    touch-action: pan-y; /* Для свайпа */
+}
+
+#next, #back-to-menu, #buy-all {
+    display: block;
+    margin: 20px auto;
+}

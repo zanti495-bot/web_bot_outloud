@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Дизайн</title>
+    <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body class="dark-theme">
+    <h1>Настройки дизайна Mini App</h1>
+    <form method="post">
+        <label>Фон: <input name="background_color" value="{{ design.background_color }}"></label><br><br>
+        <label>Текст: <input name="text_color" value="{{ design.text_color }}"></label><br><br>
+        <label>Шрифт: <input name="font_family" value="{{ design.font_family }}"></label><br><br>
+        <button type="submit">Сохранить</button>
+    </form>
+    <a href="{{ url_for('dashboard') }}">Назад</a>
+</body>
+</html>
