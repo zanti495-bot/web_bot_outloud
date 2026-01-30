@@ -3,27 +3,20 @@ import os
 import io
 import pandas as pd
 from datetime import datetime
-from database import (
-    db, Block, Question, User, View, Design, AuditLog, Purchase,
-    Base, engine, SessionLocal
-)
+from database import db, Block, Question, User, View, Design, AuditLog, Purchase, Base, engine
 from sqlalchemy import func
 from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
-app.secret_key = os.getenv(
-    "FLASK_SECRET_KEY",
-    "Kjwje18J_kemfjcijwjnjfnkwnfkewjnl_k2i13ji2iuUUUWJDJ_Kfijwoejnf"
-)
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "Kjwje18J_kemfjcijwjnjfnkwnfkewjnl_k2i13ji2iuUUUWJDJ_Kfijwoejnf")
 
-# Безопасная инициализация таблиц при старте приложения
+# Безопасная инициализация таблиц БД
 with app.app_context():
     try:
         Base.metadata.create_all(bind=engine)
         print(f"[{datetime.now()}] Таблицы БД созданы или уже существуют")
     except Exception as e:
         print(f"[{datetime.now()}] Ошибка инициализации БД: {str(e)}")
-        # Продолжаем запуск, чтобы health-check и другие роуты работали
 
 # Health-check
 @app.route('/health')
@@ -71,7 +64,7 @@ def admin_blocks():
         block = Block(name=name, is_paid=is_paid, price=price)
         db.session.add(block)
         db.session.commit()
-        # AuditLog.log(f'Добавлен блок: {name}')
+        AuditLog.log(f'Добавлен блок: {name}')
     blocks = db.session.query(Block).all()
     return render_template('blocks.html', blocks=blocks)
 
@@ -88,7 +81,7 @@ def admin_questions(block_id):
         question = Question(text=text, block_id=block_id)
         db.session.add(question)
         db.session.commit()
-        # AuditLog.log(f'Добавлен вопрос в блок {block_id}')
+        AuditLog.log(f'Добавлен вопрос в блок {block_id}')
     questions = db.session.query(Question).filter_by(block_id=block_id).all()
     return render_template('questions.html', block=block, questions=questions)
 
@@ -106,7 +99,7 @@ def admin_design():
         }
         db.session.add(design)
         db.session.commit()
-        # AuditLog.log('Обновлён дизайн')
+        AuditLog.log('Обновлён дизайн')
     settings = design.settings if design else {}
     return render_template('design.html', design=settings)
 
@@ -117,11 +110,9 @@ def admin_broadcast():
         return redirect(url_for('admin_login'))
     if request.method == 'POST':
         message = request.form['message']
-        # Здесь можно вызвать функцию рассылки из bot.py
-        # from bot import send_broadcast
-        # send_broadcast(message)
-        # AuditLog.log('Отправлена рассылка')
-        pass  # пока заглушка
+        from bot import send_broadcast
+        send_broadcast(message)
+        AuditLog.log('Отправлена рассылка')
     return render_template('broadcast.html')
 
 # Аналитика
@@ -130,7 +121,7 @@ def admin_analytics():
     if not session.get('admin'):
         return redirect(url_for('admin_login'))
     top_blocks = db.session.query(Block.name, func.count(View.id))\
-        .join(View, Block.id == View.question_id)\
+        .join(View, Block.id == Question.block_id, View.question_id == Question.id)\
         .group_by(Block.id)\
         .order_by(func.count(View.id).desc())\
         .limit(5).all()
@@ -158,7 +149,7 @@ def block_user(user_id):
     if user:
         user.blocked = True
         db.session.commit()
-        # AuditLog.log(f'Заблокирован пользователь {user_id}')
+        AuditLog.log(f'Заблокирован пользователь {user_id}')
     return redirect(url_for('admin_users'))
 
 @app.route('/admin/unblock_user/<int:user_id>', methods=['POST'])
@@ -169,7 +160,7 @@ def unblock_user(user_id):
     if user:
         user.blocked = False
         db.session.commit()
-        # AuditLog.log(f'Разблокирован пользователь {user_id}')
+        AuditLog.log(f'Разблокирован пользователь {user_id}')
     return redirect(url_for('admin_users'))
 
 @app.route('/admin/user_views/<int:user_id>')
