@@ -2,6 +2,9 @@ import os
 import logging
 from contextlib import asynccontextmanager
 
+print("=== MAIN.PY VERSION 2026-01-31-v3 LOADED ===")   # ← добавь эту строку
+print(f"Current commit: {os.environ.get('COMMIT_SHA', 'unknown')}")
+
 from flask import Flask, request, render_template_string
 from aiogram import Bot, Dispatcher
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Update, WebAppInfo
