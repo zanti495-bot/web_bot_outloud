@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-ARG CACHE_BUSTER=2026-02-01-v2
+ARG CACHE_BUSTER=2026-02-01-v4
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \

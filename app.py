@@ -3,7 +3,7 @@ import logging
 import asyncio
 import json
 
-print("=== APP.PY VERSION 2026-02-01-v3 LOADED ===")
+print("=== APP.PY VERSION 2026-02-01-v4 LOADED ===")
 print(f"Current commit: {os.environ.get('COMMIT_SHA', 'unknown')}")
 
 from fastapi import FastAPI, Request
@@ -66,10 +66,8 @@ class BotSettings(SQLModel, table=True):
 # Создание таблиц + дефолтные настройки
 @app.on_event("startup")
 async def startup_event():
-    logger.info("Startup event started")
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
-    logger.info("Tables created")
 
     async with async_session() as session:
         result = await session.execute(select(BotSettings))
@@ -77,7 +75,6 @@ async def startup_event():
             session.add(BotSettings())
             await session.commit()
             await session.refresh()
-        logger.info("Default settings checked")
 
     # Установка webhook
     webhook_url = f"{app_url.rstrip('/')}/webhook"
@@ -87,7 +84,7 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Ошибка установки webhook: {e}")
 
-# Aiogram handlers (минимальный набор)
+# Aiogram handlers (пока минимальный набор)
 @dp.message(Command("start"))
 async def start_handler(message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -104,7 +101,6 @@ async def start_handler(message):
         welcome = settings.welcome_message if settings else "Добро пожаловать!"
 
     await message.answer(welcome, reply_markup=keyboard)
-    logger.info(f"Handled /start for user {message.from_user.id}")
 
 # Webhook endpoint
 @app.post("/webhook")
@@ -113,13 +109,12 @@ async def webhook_handler(request: Request):
         data = await request.json()
         update = Update.model_validate(data)
         await dp.feed_update(bot=bot, update=update)
-        logger.info("Webhook processed successfully")
         return {"ok": True}
     except Exception as e:
         logger.error(f"Ошибка обработки webhook: {e}", exc_info=True)
         return {"ok": False}, 500
 
-# Простой Mini App
+# Простой Mini App (можно расширить)
 @app.get("/miniapp", response_class=HTMLResponse)
 async def miniapp_page():
     return """

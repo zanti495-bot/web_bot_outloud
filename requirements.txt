@@ -6,5 +6,5 @@ asyncpg==0.29.0
 sqlalchemy[asyncio]==2.0.35
 sqlmodel==0.0.22
 fastapi-amis-admin==0.6.3
-pydantic==2.5.2
+pydantic==2.7.4
 pydantic-settings==2.5.2

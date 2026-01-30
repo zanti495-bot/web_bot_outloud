@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 def get_dsn() -> str:
     raw_dsn = os.environ.get('DATABASE_URL')
     if not raw_dsn:
-        raise ValueValue("DATABASE_URL не установлен!")
+        raise ValueError("DATABASE_URL не установлен!")
 
     cert_path = '/app/ca.crt'
 
