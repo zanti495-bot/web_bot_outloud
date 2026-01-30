@@ -23,7 +23,7 @@ class Broadcast(StatesGroup):
 async def start(message: types.Message):
     get_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Открыть вопросы", web_app=types.WebAppInfo(url=config.MINI_APP_URL))]
+        [InlineKeyboardButton(text="Открыть вопросы", web_app=types.WebAppInfo(url="https://zanti495-bot-web-bot-outloud-3d66.twc1.net/webapp/"))]
     ])
     await message.reply("Добро пожаловать! Нажмите кнопку ниже, чтобы открыть Mini App.", reply_markup=keyboard)
 
