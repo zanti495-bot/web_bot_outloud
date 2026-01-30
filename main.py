@@ -15,53 +15,49 @@ app = Flask(__name__)
 
 bot_token = os.environ.get('BOT_TOKEN')
 if not bot_token:
-    raise ValueError("BOT_TOKEN не установлен в переменных окружения")
+    raise ValueError("BOT_TOKEN не установлен!")
 
 bot = Bot(token=bot_token)
 dp = Dispatcher()
 
-# Флаг однократной инициализации
+# Флаг для однократной инициализации
 setup_done = False
-
 
 @app.before_request
 def setup_once():
     global setup_done
     if not setup_done:
         setup_done = True
-        asyncio.run(init_db())
-        asyncio.run(set_webhook())
+        try:
+            asyncio.run(init_db())
+            logger.info("База данных инициализирована")
+        except Exception as e:
+            logger.error(f"Ошибка init_db: {e}", exc_info=True)
 
+        try:
+            asyncio.run(set_webhook())
+        except Exception as e:
+            logger.error(f"Ошибка set_webhook: {e}", exc_info=True)
 
 async def set_webhook():
     app_url = os.environ.get('APP_URL')
     if not app_url:
-        logger.error("APP_URL не установлен в переменных окружения")
+        logger.error("APP_URL не установлен!")
         return
 
     webhook_url = f"{app_url.rstrip('/')}/webhook"
-    try:
-        await bot.set_webhook(webhook_url)
-        logger.info(f"Webhook успешно установлен: {webhook_url}")
-    except Exception as e:
-        logger.error(f"Не удалось установить webhook: {e}")
-
+    await bot.set_webhook(webhook_url)
+    logger.info(f"Webhook установлен: {webhook_url}")
 
 @dp.message(Command("start"))
 async def start_handler(message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="Открыть вопросы",
-                web_app=WebAppInfo(url=f"{os.environ.get('APP_URL', 'http://localhost:8000')}/miniapp")
-            )
-        ]
+        [InlineKeyboardButton(
+            text="Открыть вопросы",
+            web_app=WebAppInfo(url=f"{os.environ.get('APP_URL')}/miniapp")
+        )]
     ])
-    await message.answer(
-        "Добро пожаловать!\nНажми кнопку ниже, чтобы открыть Mini App.",
-        reply_markup=keyboard
-    )
-
+    await message.answer("Добро пожаловать!", reply_markup=keyboard)
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -72,9 +68,8 @@ def webhook():
             asyncio.run(dp.feed_update(bot, update))
         return 'OK', 200
     except Exception as e:
-        logger.error(f"Ошибка обработки webhook: {e}", exc_info=True)
+        logger.error(f"Webhook error: {e}", exc_info=True)
         return 'Error', 500
-
 
 @app.route('/miniapp')
 def miniapp():
@@ -84,45 +79,26 @@ def miniapp():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Mini App — Вопросы</title>
+        <title>Mini App</title>
         <script src="https://telegram.org/js/telegram-web-app.js"></script>
-        <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-                   background: #f0f2f5; margin: 0; padding: 20px; color: #333; }
-            h1 { color: #0088cc; }
-            .card { background: white; border-radius: 12px; padding: 20px; margin: 16px 0; 
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        </style>
     </head>
-    <body>
+    <body style="font-family:sans-serif; padding:20px; background:#f0f2f5;">
         <h1>Привет из Mini App!</h1>
-        <div class="card">
-            <p><strong>User ID:</strong> <span id="user-id">загружается...</span></p>
-            <p><strong>Имя:</strong> <span id="first-name">загружается...</span></p>
-            <p><strong>Username:</strong> @<span id="username">загружается...</span></p>
-        </div>
-
+        <p><strong>User ID:</strong> <span id="uid">загружается...</span></p>
         <script>
             const tg = window.Telegram.WebApp;
             tg.ready();
             tg.expand();
-
             const user = tg.initDataUnsafe.user || {};
-            document.getElementById('user-id').textContent = user.id || 'не удалось получить';
-            document.getElementById('first-name').textContent = user.first_name || '—';
-            document.getElementById('username').textContent = user.username || 'нет';
+            document.getElementById('uid').textContent = user.id || 'не получен';
         </script>
     </body>
     </html>
     ''')
 
-
 if __name__ == '__main__':
-    # Локальный запуск для теста
     asyncio.run(init_db())
     asyncio.run(set_webhook())
     app.run(host='0.0.0.0', port=8000, debug=True)
 
-
-# Для production (gunicorn + uvicorn)
 app = WsgiToAsgi(app)
