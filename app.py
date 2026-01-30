@@ -12,7 +12,10 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 from aiohttp import web
+from aiohttp.web_request import Request
+from aiohttp.web_response import Response
 import asyncio
+import json
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "Kjwje18J_kemfjcijwjnjfnkwnfkewjnl_k2i13ji2iuUUUWJDJ_Kfijwoejnf")
@@ -23,9 +26,29 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 # Webhook настройки
-WEBHOOK_HOST = os.getenv('WEBHOOK_HOST', 'https://zanti495-bot-web-bot-outloud-3d66.twc1.net')  # ← замени на свой реальный домен из timeweb.cloud
+WEBHOOK_HOST = os.getenv('WEBHOOK_HOST', 'https://zanti495-bot-web-bot-outloud-3d66.twc1.net')  # Замените на ваш реальный домен из timeweb.cloud
 WEBHOOK_PATH = '/webhook'
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
+
+# Обработчик /start для бота
+@dp.message(Command("start"))
+async def start_handler(message: Message):
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="Открыть вопросы",
+                web_app=types.WebAppInfo(url=WEBHOOK_HOST)  # URL Mini App — ваш домен
+            )
+        ]
+    ])
+    await message.answer(
+        "Добро пожаловать! Нажмите кнопку ниже, чтобы открыть Mini App.",
+        reply_markup=keyboard
+    )
+
+@dp.message()
+async def echo(message: Message):
+    await message.reply("Привет! Это бот для рассылок. Используйте /start.")
 
 # Безопасная инициализация таблиц БД
 with app.app_context():
@@ -143,24 +166,28 @@ def api_view():
 def index():
     return app.send_static_file('index.html')
 
-# Обработчик webhook для aiogram
-async def webhook_handler(request):
+# Асинхронный хендлер webhook для aiogram
+async def webhook_handler(request: Request) -> Response:
     update = types.Update(**(await request.json()))
     await dp.feed_update(bot, update)
     return web.json_response({'status': 'ok'})
 
-# Запуск Flask + aiohttp webhook
+# Запуск aiohttp сервера с интеграцией Flask маршрутов
+async def on_startup(aio_app):
+    webhook = await bot.get_webhook_info()
+    if webhook.url != WEBHOOK_URL:
+        await bot.set_webhook(WEBHOOK_URL)
+
 if __name__ == '__main__':
-    from aiohttp import web
     aiohttp_app = web.Application()
     aiohttp_app.router.add_post(WEBHOOK_PATH, webhook_handler)
-
-    async def on_startup(aio_app):
-        webhook = await bot.get_webhook_info()
-        if webhook.url != WEBHOOK_URL:
-            await bot.set_webhook(WEBHOOK_URL)
-
     aiohttp_app.on_startup.append(on_startup)
+    # Добавляем Flask маршруты в aiohttp (используем middleware)
+    @aiohttp_app.middleware
+    async def flask_middleware(request, handler):
+        with app.test_request_context():
+            return await handler(request)
 
-    # Запуск aiohttp сервера (Flask не используется как основной сервер, только маршруты)
+    aiohttp_app.middlewares.append(flask_middleware)
+
     web.run_app(aiohttp_app, host='0.0.0.0', port=int(os.getenv('PORT', 8080)))
