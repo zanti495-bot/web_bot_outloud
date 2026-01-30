@@ -15,4 +15,4 @@ COPY . .
 ENV PORT=8080
 
 # Запуск через Gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "2", "admin_panel:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "admin_panel:app"]
