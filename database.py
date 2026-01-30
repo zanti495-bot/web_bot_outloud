@@ -5,7 +5,12 @@ from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 import config
 
-engine = create_engine(config.DATABASE_URL)
+from sqlalchemy.exc import ArgumentError
+try:
+    engine = create_engine(config.DATABASE_URL)
+except ArgumentError as e:
+    print(f"Ошибка в DATABASE_URL: {e}")
+    raise
 Base = declarative_base()
 Session = sessionmaker(bind=engine)
 
