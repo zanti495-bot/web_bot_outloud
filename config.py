@@ -1,33 +1,14 @@
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8200746971:AAGkBS64Mn5LJtIlrMMPTZTfCdHdOdUb6Pc")
+ADMIN_TELEGRAM_ID = int(os.getenv("ADMIN_TELEGRAM_ID", "393628087"))
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "aasdJI2j12309LL")
+FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY", "Kjwje18J_kemfjcijwjnjfnkwnfkewjnl_k2i13ji2iuUUUWJDJ_Kfijwoejnf")
+DATABASE_URL = os.getenv("DATABASE_URL")                      # обязательно должен быть в переменных окружения Timeweb
+WEBHOOK_DOMAIN = "https://zanti495-bot-web-bot-outloud-3d66.twc1.net"
+WEBHOOK_PATH = "/webhook"
+WEBHOOK_URL = f"{WEBHOOK_DOMAIN}{WEBHOOK_PATH}"
 
-# Telegram Bot
-BOT_TOKEN = os.getenv('BOT_TOKEN')
-PAYMENT_PROVIDER_TOKEN = os.getenv('PAYMENT_PROVIDER_TOKEN')  # Не используется, т.к. покупки условные
-
-# Database
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql+psycopg2://user:password@localhost/bot_outloud')
-
-# Webhook
-WEBHOOK_HOST = os.getenv('WEBHOOK_HOST', 'https://yourdomain.com')
-WEBHOOK_PATH = '/webhook'
-WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
-
-# Mini App URL
-MINI_APP_URL = f"{WEBHOOK_HOST}/webapp/"
-
-# Flask Admin
-FLASK_SECRET_KEY = os.getenv('FLASK_SECRET_KEY', 'secret')
-ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'adminpass')
-
-# Admin ID for Telegram admin commands
-ADMIN_TELEGRAM_ID = int(os.getenv('ADMIN_TELEGRAM_ID', 123456789))  # Ваш Telegram ID
-
-# Design settings (default)
-DEFAULT_DESIGN = {
-    'background_color': '#FFFFFF',
-    'text_color': '#000000',
-    'font_family': 'Arial',
-}
+# Для удобства отладки локально можно раскомментировать:
+# from dotenv import load_dotenv
+# load_dotenv()
