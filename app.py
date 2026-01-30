@@ -14,7 +14,7 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "Kjwje18J_kemfjcijwjnjfnkwnfkewjn
 with app.app_context():
     from database import init_db
     if not init_db(max_attempts=5, delay=3):
-        print(f"[{datetime.now()}] Критическая ошибка: БД не инициализирована. Приложение может работать некорректно.")
+        print(f"[{datetime.now()}] Предупреждение: БД не инициализирована (возможно, таблицы уже существуют). Приложение продолжает работу.")
     else:
         print(f"[{datetime.now()}] Инициализация БД прошла успешно")
 
