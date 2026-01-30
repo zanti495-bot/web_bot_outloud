@@ -19,10 +19,9 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Домен берём из переменной окружения или fallback
 WEBHOOK_HOST = os.getenv('WEBHOOK_HOST', 'https://zanti495-bot-web-bot-outloud-3d66.twc1.net')
 WEBHOOK_PATH = '/webhook'
-WEBHOOK_URL = f"{WEBHOOK_HOST.rstrip('/')}{WEBHOOK_PATH}"
+WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 
 @dp.message(Command("start"))
 async def start_handler(message: types.Message):
@@ -64,7 +63,7 @@ async def telegram_webhook():
         logging.error(f"Ошибка в webhook: {e}")
         return jsonify(status="error"), 500
 
-# Установка webhook (вызвать после деплоя)
+# Установка webhook
 @app.route('/admin/set_webhook')
 def admin_set_webhook():
     if 'logged_in' not in session:
@@ -76,11 +75,15 @@ def admin_set_webhook():
     except Exception as e:
         return f"Ошибка установки webhook: {str(e)}", 500
 
-# Отложенная инициализация БД
+# Отложенная инициализация БД с logging
 try:
+    logging.info("Начало импорта database.py")
     from database import init_db, db, Block, Question, User, View, Design, AuditLog, Purchase
+    logging.info("Импорт database.py успешен")
     init_db(max_attempts=15, delay=4)
     logging.info("База данных инициализирована")
+except ImportError as ie:
+    logging.error(f"Ошибка импорта database.py: {ie}")
 except Exception as e:
     logging.error(f"Не удалось инициализировать БД при старте: {e}")
 
