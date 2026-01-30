@@ -279,5 +279,5 @@ def api_create_invoice():
     return jsonify({'ok': True, 'message': 'Покупка успешна (условно)'})  # Условная покупка
 
 # ====================== Запуск ======================
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+#if __name__ == '__main__':
+#    app.run(host='0.0.0.0', port=5000)
