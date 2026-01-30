@@ -10,7 +10,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Update, WebAppInfo
 from aiogram.filters import Command
 
-from sqlmodel import SQLModel, Field, select, Session
+from sqlmodel import SQLModel, Field, select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
 from database import get_dsn
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Telegram Quiz Bot")
 
-print("=== APP.PY VERSION 2026-02-01-v10 LOADED ===")
+print("=== APP.PY VERSION 2026-02-01-v12 LOADED ===")
 print(f"Current commit: {os.environ.get('COMMIT_SHA', 'unknown')}")
 print(f"APP_URL = {os.environ.get('APP_URL')}")
 print(f"BOT_TOKEN exists = {bool(os.environ.get('BOT_TOKEN'))}")
@@ -64,7 +64,7 @@ class BotSettings(SQLModel, table=True):
     id: int = Field(default=1, primary_key=True)
     welcome_message: str = Field(default="Добро пожаловать в квиз!")
 
-# Создание таблиц + дефолтные настройки
+# Startup
 @app.on_event("startup")
 async def startup():
     print("=== STARTUP STARTED ===")
@@ -92,7 +92,7 @@ async def startup():
         logger.exception("Startup error")
     print("=== STARTUP FINISHED ===")
 
-# Aiogram handlers
+# Aiogram /start
 @dp.message(Command("start"))
 async def start_handler(message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -109,7 +109,7 @@ async def start_handler(message):
 
 # Webhook
 @app.post("/webhook")
-async def webhook_handler(request: Request):
+async def webhook(request: Request):
     try:
         data = await request.json()
         update = Update.model_validate(data)
@@ -122,37 +122,21 @@ async def webhook_handler(request: Request):
 
 # Mini App
 @app.get("/miniapp", response_class=HTMLResponse)
-async def miniapp():
-    return """
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <title>Mini App</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-</head>
-<body>
-    <h1>Привет из Mini App!</h1>
-    <p id="user-id">User ID: ...</p>
-    <script>
-        const user = Telegram.WebApp.initDataUnsafe.user;
-        document.getElementById('user-id').innerText = 'User ID: ' + (user ? user.id : 'Not available');
-    </script>
-</body>
-</html>
-    """
+async def miniapp(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
-# Простая админка (без amis)
+# Админка
 @app.get("/admin", response_class=HTMLResponse)
-async def admin_page():
+async def admin_page(request: Request):
     async with async_session() as session:
         questions = await session.execute(select(Question))
         questions = questions.scalars().all()
-    return templates.TemplateResponse("admin.html", {"request": {}, "questions": questions})
+    return templates.TemplateResponse("admin.html", {"request": request, "questions": questions})
 
-# Создание вопроса (форма)
+# Создание вопроса
 @app.post("/admin/question")
 async def create_question(
+    request: Request,
     text: str = Form(...),
     options_json: str = Form(...),
     correct_index: int = Form(...),
@@ -177,7 +161,7 @@ async def create_question(
         await session.commit()
     return RedirectResponse("/admin", status_code=303)
 
-# Health check
+# Health
 @app.get("/health")
 async def health():
     return {"status": "OK"}
