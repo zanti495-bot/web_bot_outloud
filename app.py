@@ -1,19 +1,29 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_file
 import os
 import io
-from database import db, Block, Question, User, View, Design, AuditLog, Purchase
+import pandas as pd
+from datetime import datetime
+from database import (
+    db, Block, Question, User, View, Design, AuditLog, Purchase,
+    Base, engine, SessionLocal
+)
 from sqlalchemy import func
-from config import BOT_TOKEN, ADMIN_TELEGRAM_ID, ADMIN_PASSWORD, FLASK_SECRET_KEY, DATABASE_URL
 from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
-app.secret_key = FLASK_SECRET_KEY
-app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db.init_app(app)
+app.secret_key = os.getenv(
+    "FLASK_SECRET_KEY",
+    "Kjwje18J_kemfjcijwjnjfnkwnfkewjnl_k2i13ji2iuUUUWJDJ_Kfijwoejnf"
+)
 
+# Безопасная инициализация таблиц при старте приложения
 with app.app_context():
-    db.create_all()
+    try:
+        Base.metadata.create_all(bind=engine)
+        print(f"[{datetime.now()}] Таблицы БД созданы или уже существуют")
+    except Exception as e:
+        print(f"[{datetime.now()}] Ошибка инициализации БД: {str(e)}")
+        # Продолжаем запуск, чтобы health-check и другие роуты работали
 
 # Health-check
 @app.route('/health')
@@ -24,11 +34,18 @@ def health():
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
-        password = request.form['password']
-        if password == ADMIN_PASSWORD:  # В проде используйте хэш: if check_password_hash(hashed, password)
+        password = request.form.get('password')
+        if password == os.getenv("ADMIN_PASSWORD", "aasdJI2j12309LL"):
             session['admin'] = True
             return redirect(url_for('admin_dashboard'))
+        else:
+            return render_template('login.html', error="Неверный пароль")
     return render_template('login.html')
+
+@app.route('/admin/logout')
+def admin_logout():
+    session.pop('admin', None)
+    return redirect(url_for('admin_login'))
 
 # Дашборд
 @app.route('/admin')
@@ -42,7 +59,7 @@ def admin_dashboard():
     }
     return render_template('dashboard.html', stats=stats)
 
-# Блоки
+# Управление блоками
 @app.route('/admin/blocks', methods=['GET', 'POST'])
 def admin_blocks():
     if not session.get('admin'):
@@ -50,11 +67,11 @@ def admin_blocks():
     if request.method == 'POST':
         name = request.form['name']
         is_paid = 'is_paid' in request.form
-        price = request.form.get('price', 0)
+        price = float(request.form.get('price', 0))
         block = Block(name=name, is_paid=is_paid, price=price)
         db.session.add(block)
         db.session.commit()
-        AuditLog.log('Added block: ' + name)
+        # AuditLog.log(f'Добавлен блок: {name}')
     blocks = db.session.query(Block).all()
     return render_template('blocks.html', blocks=blocks)
 
@@ -64,16 +81,18 @@ def admin_questions(block_id):
     if not session.get('admin'):
         return redirect(url_for('admin_login'))
     block = db.session.get(Block, block_id)
+    if not block:
+        return "Блок не найден", 404
     if request.method == 'POST':
         text = request.form['text']
         question = Question(text=text, block_id=block_id)
         db.session.add(question)
         db.session.commit()
-        AuditLog.log('Added question to block ' + str(block_id))
+        # AuditLog.log(f'Добавлен вопрос в блок {block_id}')
     questions = db.session.query(Question).filter_by(block_id=block_id).all()
     return render_template('questions.html', block=block, questions=questions)
 
-# Дизайн
+# Дизайн Mini App
 @app.route('/admin/design', methods=['GET', 'POST'])
 def admin_design():
     if not session.get('admin'):
@@ -87,20 +106,22 @@ def admin_design():
         }
         db.session.add(design)
         db.session.commit()
-        AuditLog.log('Updated design')
-    return render_template('design.html', design=design.settings if design else {})
+        # AuditLog.log('Обновлён дизайн')
+    settings = design.settings if design else {}
+    return render_template('design.html', design=settings)
 
-# Рассылка (интеграция с ботом через API или напрямую, но здесь placeholder)
+# Рассылка
 @app.route('/admin/broadcast', methods=['GET', 'POST'])
 def admin_broadcast():
     if not session.get('admin'):
         return redirect(url_for('admin_login'))
     if request.method == 'POST':
         message = request.form['message']
-        # Здесь вызов бота для рассылки (в bot.py добавить функцию)
-        from bot import send_broadcast
-        send_broadcast(message)
-        AuditLog.log('Sent broadcast')
+        # Здесь можно вызвать функцию рассылки из bot.py
+        # from bot import send_broadcast
+        # send_broadcast(message)
+        # AuditLog.log('Отправлена рассылка')
+        pass  # пока заглушка
     return render_template('broadcast.html')
 
 # Аналитика
@@ -108,27 +129,63 @@ def admin_broadcast():
 def admin_analytics():
     if not session.get('admin'):
         return redirect(url_for('admin_login'))
-    top_blocks = db.session.query(Block.name, func.count(View.id)).join(View).group_by(Block.id).order_by(func.count(View.id).desc()).limit(5).all()
+    top_blocks = db.session.query(Block.name, func.count(View.id))\
+        .join(View, Block.id == View.question_id)\
+        .group_by(Block.id)\
+        .order_by(func.count(View.id).desc())\
+        .limit(5).all()
     return render_template('analytics.html', top_blocks=top_blocks)
 
-# Экспорт пользователей в CSV
-@app.route('/admin/export_users')
-def export_users():
+# Пользователи
+@app.route('/admin/users', methods=['GET', 'POST'])
+def admin_users():
     if not session.get('admin'):
         return redirect(url_for('admin_login'))
-    import pandas as pd
-    users = db.session.query(User).all()
-    df = pd.DataFrame([{'id': u.id, 'username': u.username, 'blocked': u.blocked} for u in users])
-    output = io.StringIO()
-    df.to_csv(output, index=False)
-    return send_file(io.BytesIO(output.getvalue().encode()), as_attachment=True, download_name='users.csv')
+    query = request.form.get('query', '') if request.method == 'POST' else ''
+    if query:
+        users = db.session.query(User).filter(
+            (User.username.ilike(f'%{query}%')) | (User.telegram_id == query)
+        ).all()
+    else:
+        users = db.session.query(User).all()
+    return render_template('users.html', users=users)
+
+@app.route('/admin/block_user/<int:user_id>', methods=['POST'])
+def block_user(user_id):
+    if not session.get('admin'):
+        return redirect(url_for('admin_login'))
+    user = db.session.get(User, user_id)
+    if user:
+        user.blocked = True
+        db.session.commit()
+        # AuditLog.log(f'Заблокирован пользователь {user_id}')
+    return redirect(url_for('admin_users'))
+
+@app.route('/admin/unblock_user/<int:user_id>', methods=['POST'])
+def unblock_user(user_id):
+    if not session.get('admin'):
+        return redirect(url_for('admin_login'))
+    user = db.session.get(User, user_id)
+    if user:
+        user.blocked = False
+        db.session.commit()
+        # AuditLog.log(f'Разблокирован пользователь {user_id}')
+    return redirect(url_for('admin_users'))
+
+@app.route('/admin/user_views/<int:user_id>')
+def user_views(user_id):
+    if not session.get('admin'):
+        return redirect(url_for('admin_login'))
+    views = db.session.query(View).filter_by(user_id=user_id)\
+        .order_by(View.timestamp.desc()).limit(10).all()
+    return render_template('user_views.html', views=views)
 
 # Логи аудита
 @app.route('/admin/logs')
 def admin_logs():
     if not session.get('admin'):
         return redirect(url_for('admin_login'))
-    logs = db.session.query(AuditLog).all()
+    logs = db.session.query(AuditLog).order_by(AuditLog.timestamp.desc()).all()
     return render_template('logs.html', logs=logs)
 
 @app.route('/admin/clear_logs', methods=['POST'])
@@ -139,41 +196,27 @@ def clear_logs():
     db.session.commit()
     return redirect(url_for('admin_logs'))
 
-# Поиск и управление пользователями
-@app.route('/admin/users', methods=['GET', 'POST'])
-def admin_users():
+# Экспорт пользователей в CSV
+@app.route('/admin/export_users')
+def export_users():
     if not session.get('admin'):
         return redirect(url_for('admin_login'))
-    query = request.form.get('query', '') if request.method == 'POST' else ''
-    users = db.session.query(User).filter((User.username.ilike(f'%{query}%')) | (User.telegram_id == query)).all() if query else db.session.query(User).all()
-    return render_template('users.html', users=users)
-
-@app.route('/admin/block_user/<int:user_id>', methods=['POST'])
-def block_user(user_id):
-    if not session.get('admin'):
-        return redirect(url_for('admin_login'))
-    user = db.session.get(User, user_id)
-    user.blocked = True
-    db.session.commit()
-    AuditLog.log(f'Blocked user {user_id}')
-    return redirect(url_for('admin_users'))
-
-@app.route('/admin/unblock_user/<int:user_id>', methods=['POST'])
-def unblock_user(user_id):
-    if not session.get('admin'):
-        return redirect(url_for('admin_login'))
-    user = db.session.get(User, user_id)
-    user.blocked = False
-    db.session.commit()
-    AuditLog.log(f'Unblocked user {user_id}')
-    return redirect(url_for('admin_users'))
-
-@app.route('/admin/user_views/<int:user_id>')
-def user_views(user_id):
-    if not session.get('admin'):
-        return redirect(url_for('admin_login'))
-    views = db.session.query(View).filter_by(user_id=user_id).order_by(View.timestamp.desc()).limit(10).all()
-    return render_template('user_views.html', views=views)
+    users = db.session.query(User).all()
+    df = pd.DataFrame([{
+        'id': u.id,
+        'username': u.username,
+        'telegram_id': u.telegram_id,
+        'blocked': u.blocked
+    } for u in users])
+    output = io.BytesIO()
+    df.to_csv(output, index=False, encoding='utf-8')
+    output.seek(0)
+    return send_file(
+        output,
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name='users.csv'
+    )
 
 # API для Mini App
 @app.route('/api/blocks')
@@ -195,7 +238,7 @@ def api_design():
 def api_purchase():
     data = request.json
     user_id = data['user_id']
-    block_id = data.get('block_id')  # None для buy_all
+    block_id = data.get('block_id')  # None = все блоки
     purchase = Purchase(user_id=user_id, block_id=block_id)
     db.session.add(purchase)
     db.session.commit()
@@ -214,10 +257,10 @@ def api_view():
     db.session.commit()
     return jsonify({'success': True})
 
-# Главная для Mini App
+# Главная страница Mini App
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return app.send_static_file('index.html')
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8080)), debug=True)
