@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Админка Квиза</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        form { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Админ-панель Квиза</h1>
+
+    <h2>Добавить вопрос</h2>
+    <form action="/admin/question" method="post">
+        <label>Текст вопроса:</label><br>
+        <input type="text" name="text" required style="width:100%;"><br><br>
+
+        <label>Варианты (JSON массив):</label><br>
+        <textarea name="options_json" required rows="4" style="width:100%;">["Вариант 1", "Вариант 2", "Вариант 3"]</textarea><br><br>
+
+        <label>Индекс правильного ответа (0-based):</label><br>
+        <input type="number" name="correct_index" required min="0"><br><br>
+
+        <label>Сложность (1–5):</label><br>
+        <input type="number" name="difficulty" required min="1" max="5"><br><br>
+
+        <label>Объяснение:</label><br>
+        <textarea name="explanation" rows="3" style="width:100%;"></textarea><br><br>
+
+        <label>Ссылка на картинку:</label><br>
+        <input type="text" name="image_url" style="width:100%;"><br><br>
+
+        <label>Активен:</label>
+        <input type="checkbox" name="is_active" checked><br><br>
+
+        <label>Категория ID (если есть):</label><br>
+        <input type="number" name="category_id"><br><br>
+
+        <input type="submit" value="Добавить вопрос">
+    </form>
+
+    <h2>Список вопросов</h2>
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Текст</th>
+            <th>Сложность</th>
+            <th>Активен</th>
+        </tr>
+        {% for q in questions %}
+        <tr>
+            <td>{{ q.id }}</td>
+            <td>{{ q.text }}</td>
+            <td>{{ q.difficulty }}</td>
+            <td>{{ 'Да' if q.is_active else 'Нет' }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>

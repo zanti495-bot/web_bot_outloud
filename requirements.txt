@@ -1,10 +1,9 @@
-fastapi==0.100.1
-aiogram==3.13.1
-gunicorn==23.0.0
+fastapi==0.115.0
 uvicorn==0.30.6
+gunicorn==23.0.0
+aiogram==3.13.1
 asyncpg==0.29.0
-sqlalchemy[asyncio]==2.0.35
 sqlmodel==0.0.22
-fastapi-amis-admin==0.6.3
-pydantic==2.7.4
-pydantic-settings==2.5.2
+sqlalchemy[asyncio]==2.0.35
+jinja2==3.1.4
+python-multipart==0.0.9
