@@ -64,37 +64,38 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL не установлен в переменных окружения!")
 
-# Добавляем параметр sslmode=disable — это решает проблему с root.crt на timeweb
+# Добавляем sslmode=verify-full и sslrootcert
 if "sslmode" not in DATABASE_URL:
-    if DATABASE_URL.startswith("postgresql://"):
-        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://")
-    DATABASE_URL += "?sslmode=disable"
+    DATABASE_URL += "?sslmode=verify-full&sslrootcert=/root/.postgresql/root.crt"
 
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
     pool_recycle=3600,          # переподключение каждые 60 минут
     pool_size=5,
-    max_overflow=10
+    max_overflow=10,
+    connect_args={
+        'sslmode': 'verify-full',
+        'sslrootcert': '/root/.postgresql/root.crt'
+    }
 )
 
 Session = sessionmaker(bind=engine)
 db = Session()
 
-
 def init_db(max_attempts=5, delay=3):
-    """Безопасная инициализация таблиц с повторными попытками"""
+    """Безопасная инициализация таблиц с повторными попытками и общей транзакцией"""
     attempt = 1
     while attempt <= max_attempts:
         try:
-            # Создаём таблицы в логическом порядке + checkfirst
-            User.__table__.create(bind=engine, checkfirst=True)
-            Block.__table__.create(bind=engine, checkfirst=True)
-            Question.__table__.create(bind=engine, checkfirst=True)
-            View.__table__.create(bind=engine, checkfirst=True)
-            Design.__table__.create(bind=engine, checkfirst=True)
-            AuditLog.__table__.create(bind=engine, checkfirst=True)
-            Purchase.__table__.create(bind=engine, checkfirst=True)
+            with engine.begin() as conn:  # Общая транзакция для всех creates
+                User.__table__.create(bind=conn, checkfirst=True)
+                Block.__table__.create(bind=conn, checkfirst=True)
+                Question.__table__.create(bind=conn, checkfirst=True)
+                View.__table__.create(bind=conn, checkfirst=True)
+                Design.__table__.create(bind=conn, checkfirst=True)
+                AuditLog.__table__.create(bind=conn, checkfirst=True)
+                Purchase.__table__.create(bind=conn, checkfirst=True)
             
             print(f"[{datetime.now()}] Таблицы успешно созданы или уже существуют")
             return True
