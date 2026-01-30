@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, DateTime, JSON, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, DateTime, JSON, ForeignKey, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import OperationalError, DatabaseError
@@ -67,9 +67,9 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL не установлен в переменных окружения!")
 
-# Добавляем sslmode=require (упростил, если verify-full не работает; верните если нужно)
+# Добавляем sslmode=verify-full и sslrootcert
 if "sslmode" not in DATABASE_URL:
-    DATABASE_URL += "?sslmode=require"
+    DATABASE_URL += "?sslmode=verify-full&sslrootcert=/root/.postgresql/root.crt"
 
 engine = create_engine(
     DATABASE_URL,
@@ -77,17 +77,21 @@ engine = create_engine(
     pool_recycle=3600,
     pool_size=5,
     max_overflow=10,
-    connect_args={'sslmode': 'require'}
+    connect_args={
+        'sslmode': 'verify-full',
+        'sslrootcert': '/root/.postgresql/root.crt'
+    }
 )
 
 Session = sessionmaker(bind=engine)
 db = Session()
 
-def init_db(max_attempts=10, delay=5):
+def init_db(max_attempts=15, delay=4):
+    """Безопасная инициализация таблиц с повторными попытками"""
     attempt = 1
     while attempt <= max_attempts:
         try:
-            Base.metadata.create_all(engine, checkfirst=True)
+            Base.metadata.create_all(engine, checkfirst=True)  # Автоматическая сортировка зависимостей
             logging.info(f"[{datetime.now()}] Таблицы успешно созданы или уже существуют")
             return True
         except (OperationalError, DatabaseError) as e:
@@ -96,7 +100,7 @@ def init_db(max_attempts=10, delay=5):
                 time.sleep(delay)
             attempt += 1
         except Exception as e:
-            logging.error(f"[{datetime.now()}] Неожиданная ошибка: {str(e)}")
+            logging.error(f"[{datetime.now()}] Неожиданная ошибка при создании таблиц: {str(e)}")
             break
     logging.error(f"[{datetime.now()}] Не удалось инициализировать БД после {max_attempts} попыток")
     return False
