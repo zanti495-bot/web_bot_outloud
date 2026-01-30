@@ -22,7 +22,7 @@ async def send_broadcast(message_text: str):
         except:
             pass
 
-# Webhook setup
+# Webhook setup 1
 WEBHOOK_HOST = 'https://zanti495-bot-web-bot-outloud-3d66.twc1.net'
 WEBHOOK_PATH = '/webhook'
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
