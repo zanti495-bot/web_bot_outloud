@@ -1,4 +1,3 @@
-import asyncio
 import os
 import logging
 from contextlib import asynccontextmanager
@@ -17,27 +16,29 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 bot_token = os.environ.get('BOT_TOKEN')
+app_url = os.environ.get('APP_URL')
+
 if not bot_token:
     raise ValueError("BOT_TOKEN не установлен!")
+if not app_url:
+    raise ValueError("APP_URL не установлен!")
 
 bot = Bot(token=bot_token)
 dp = Dispatcher()
 
-# --------------------------------------------------
-# Инициализация один раз при старте
-# --------------------------------------------------
-async def startup():
+@asynccontextmanager
+async def lifespan(_app):
     logger.info("Запуск инициализации...")
     await init_db()
     await set_webhook()
     logger.info("Инициализация завершена")
+    yield
+    logger.info("Остановка приложения...")
+
+# Регистрируем lifespan (gunicorn + uvicorn это поймут)
+app.config['LIFESPAN'] = lifespan
 
 async def set_webhook():
-    app_url = os.environ.get('APP_URL')
-    if not app_url:
-        logger.error("APP_URL не установлен!")
-        return
-    
     webhook_url = f"{app_url.rstrip('/')}/webhook"
     try:
         await bot.set_webhook(webhook_url)
@@ -45,19 +46,13 @@ async def set_webhook():
     except Exception as e:
         logger.error(f"Ошибка установки webhook: {e}")
 
-# Вызываем startup один раз при старте приложения
-asyncio.create_task(startup())
-
-# --------------------------------------------------
-# Хэндлеры aiogram
-# --------------------------------------------------
 @dp.message(Command("start"))
 async def start_handler(message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
                 text="Открыть вопросы",
-                web_app=WebAppInfo(url=f"{os.environ.get('APP_URL').rstrip('/')}/miniapp")
+                web_app=WebAppInfo(url=f"{app_url.rstrip('/')}/miniapp")
             )
         ]
     ])
@@ -74,9 +69,6 @@ async def start_handler(message):
     except Exception as e:
         logger.error(f"Ошибка добавления пользователя в БД: {e}")
 
-# --------------------------------------------------
-# Вебхук
-# --------------------------------------------------
 @app.route('/webhook', methods=['POST'])
 async def webhook():
     try:
@@ -91,9 +83,6 @@ async def webhook():
         logger.error(f"Ошибка обработки webhook: {e}", exc_info=True)
         return 'Error', 500
 
-# --------------------------------------------------
-# Mini App
-# --------------------------------------------------
 @app.route('/miniapp')
 def miniapp():
     return render_template_string('''
@@ -122,13 +111,6 @@ def miniapp():
     </body>
     </html>
     ''')
-
-# ---------------------------------------------------
-# Локальный запуск
-# --------------------------------------------------
-if __name__ == '__main__':
-    asyncio.run(startup())
-    app.run(host='0.0.0.0', port=8000, debug=True)
 
 # Для gunicorn + uvicorn
 app = WsgiToAsgi(app)
