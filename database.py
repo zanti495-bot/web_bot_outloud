@@ -4,51 +4,49 @@ import logging
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 import asyncpg
 
-# Настраиваем логи — будет видно в консоли Timeweb
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Глобальный пул соединений
 _pool = None
 
 def get_dsn() -> str:
     raw_dsn = os.environ.get('DATABASE_URL')
     if not raw_dsn:
-        raise ValueError("DATABASE_URL не установлен в переменных окружения!")
+        raise ValueError("DATABASE_URL не установлен!")
 
     cert_path = '/app/ca.crt'
 
-    # Отладка сертификата — самое важное сейчас
+    # Отладка сертификата
     if os.path.exists(cert_path):
         size = os.path.getsize(cert_path)
-        logger.info(f"ca.crt найден! Путь: {cert_path}, размер: {size} байт")
+        logger.info(f"ca.crt найден! Размер: {size} байт")
         try:
             with open(cert_path, 'r') as f:
-                first_lines = f.read(200).strip()
-                logger.info(f"Первые строки сертификата:\n{first_lines}")
-        except Exception as read_err:
-            logger.warning(f"Не удалось прочитать ca.crt: {read_err}")
+                first_line = f.readline().strip()
+                logger.info(f"Начало сертификата: {first_line}")
+        except Exception as e:
+            logger.warning(f"Не удалось прочитать ca.crt: {e}")
     else:
-        logger.error(f"КРИТИЧЕСКАЯ ОШИБКА: ca.crt НЕ НАЙДЕН по пути {cert_path}!")
+        logger.error("ca.crt НЕ НАЙДЕН!")
 
     parsed = urlparse(raw_dsn)
     query_params = parse_qs(parsed.query)
 
-    query_params['sslmode'] = ['verify-full']
+    # Ключевое исправление: verify-ca вместо verify-full
+    query_params['sslmode'] = ['verify-ca']
     query_params['sslrootcert'] = [cert_path]
 
     new_query = urlencode(query_params, doseq=True)
     new_parsed = parsed._replace(query=new_query)
 
     dsn = urlunparse(new_parsed)
-    logger.info(f"Сформированный DSN (без пароля): {dsn.replace(raw_dsn.split('://')[1].split('@')[0], '***:***')}")
+    logger.info("DSN сформирован (sslmode=verify-ca)")
     return dsn
-
 
 async def init_db():
     global _pool
     if _pool is not None:
-        logger.info("Пул уже создан, пропускаем повторную инициализацию")
+        logger.info("Пул уже инициализирован")
         return
 
     dsn = get_dsn()
@@ -60,44 +58,34 @@ async def init_db():
             timeout=30,
             command_timeout=60,
         )
-        logger.info("Пул соединений с PostgreSQL успешно создан")
+        logger.info("Пул соединений создан успешно")
 
         async with _pool.acquire() as conn:
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS users (
-                    id          SERIAL PRIMARY KEY,
+                    id SERIAL PRIMARY KEY,
                     telegram_id BIGINT UNIQUE NOT NULL,
-                    created_at  TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                );
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
             ''')
-            logger.info("Таблица users проверена / создана")
+            logger.info("Таблица users готова")
     except Exception as e:
-        logger.exception("Ошибка при создании пула или таблицы")
+        logger.exception("Ошибка подключения к БД или создания таблицы")
         raise
-
 
 class User:
     @staticmethod
-    async def create(telegram_id: int) -> bool:
+    async def create(telegram_id: int):
         if _pool is None:
-            raise RuntimeError("Пул соединений не инициализирован. Вызовите init_db()")
+            raise RuntimeError("Пул не инициализирован")
 
         async with _pool.acquire() as conn:
             try:
-                result = await conn.execute(
-                    '''
-                    INSERT INTO users (telegram_id)
-                    VALUES ($1)
+                await conn.execute('''
+                    INSERT INTO users (telegram_id) VALUES ($1)
                     ON CONFLICT (telegram_id) DO NOTHING
-                    ''',
-                    telegram_id
-                )
-                inserted = result == "INSERT 0 1"
-                if inserted:
-                    logger.info(f"Добавлен новый пользователь: {telegram_id}")
-                else:
-                    logger.debug(f"Пользователь {telegram_id} уже существует")
-                return inserted
+                ''', telegram_id)
+                logger.info(f"Пользователь {telegram_id} зарегистрирован")
             except Exception as e:
-                logger.error(f"Ошибка при добавлении пользователя {telegram_id}: {e}")
+                logger.error(f"Ошибка записи пользователя {telegram_id}: {e}")
                 raise
