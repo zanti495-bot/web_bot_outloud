@@ -11,10 +11,16 @@ bot_token = os.environ.get('BOT_TOKEN', 'your_fallback_token_for_local_test')
 bot = Bot(token=bot_token)
 dp = Dispatcher()
 
-@app.before_first_request
-def setup():
-    asyncio.run(init_db())
-    asyncio.run(set_webhook())
+# Флаг для инициализации только один раз
+setup_done = False
+
+@app.before_request
+def setup_once():
+    global setup_done
+    if not setup_done:
+        setup_done = True
+        asyncio.run(init_db())
+        asyncio.run(set_webhook())
 
 async def set_webhook():
     app_url = os.environ.get('APP_URL', 'https://your-local-url-for-test')
@@ -46,6 +52,7 @@ def miniapp():
 # Для локального запуска (не в production)
 if __name__ == '__main__':
     asyncio.run(init_db())
+    asyncio.run(set_webhook())
     app.run(debug=True)
 
 # Преобразование в ASGI для uvicorn
