@@ -19,8 +19,8 @@ from aiogram import Bot, Dispatcher
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Update, WebAppInfo
 from aiogram.filters import Command
 
-from fastapi_amis_admin.admin import admin
-from fastapi_amis_admin.site import AdminSite
+from fastapi_amis_admin.amis_admin.admin import ModelAdmin as admin
+from fastapi_amis_admin.amis_admin.site import AdminSite
 from sqlmodel import SQLModel, Field, select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
