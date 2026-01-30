@@ -5,6 +5,9 @@ from sqlalchemy.exc import OperationalError, DatabaseError
 from datetime import datetime
 import os
 import time
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
 
 Base = declarative_base()
 
@@ -64,40 +67,36 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL не установлен в переменных окружения!")
 
-# Добавляем sslmode=verify-full и sslrootcert
+# Добавляем sslmode=require (упростил, если verify-full не работает; верните если нужно)
 if "sslmode" not in DATABASE_URL:
-    DATABASE_URL += "?sslmode=verify-full&sslrootcert=/root/.postgresql/root.crt"
+    DATABASE_URL += "?sslmode=require"
 
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
-    pool_recycle=3600,          # переподключение каждые 60 минут
+    pool_recycle=3600,
     pool_size=5,
     max_overflow=10,
-    connect_args={
-        'sslmode': 'verify-full',
-        'sslrootcert': '/root/.postgresql/root.crt'
-    }
+    connect_args={'sslmode': 'require'}
 )
 
 Session = sessionmaker(bind=engine)
 db = Session()
 
-def init_db(max_attempts=5, delay=3):
-    """Безопасная инициализация таблиц с повторными попытками"""
+def init_db(max_attempts=10, delay=5):
     attempt = 1
     while attempt <= max_attempts:
         try:
-            Base.metadata.create_all(engine, checkfirst=True)  # Автоматическая сортировка зависимостей
-            print(f"[{datetime.now()}] Таблицы успешно созданы или уже существуют")
+            Base.metadata.create_all(engine, checkfirst=True)
+            logging.info(f"[{datetime.now()}] Таблицы успешно созданы или уже существуют")
             return True
         except (OperationalError, DatabaseError) as e:
-            print(f"[{datetime.now()}] Попытка {attempt}/{max_attempts} — ошибка БД: {str(e)}")
+            logging.error(f"[{datetime.now()}] Попытка {attempt}/{max_attempts} — ошибка БД: {str(e)}")
             if attempt < max_attempts:
                 time.sleep(delay)
             attempt += 1
         except Exception as e:
-            print(f"[{datetime.now()}] Неожиданная ошибка при создании таблиц: {str(e)}")
+            logging.error(f"[{datetime.now()}] Неожиданная ошибка: {str(e)}")
             break
-    print(f"[{datetime.now()}] Не удалось инициализировать БД после {max_attempts} попыток")
+    logging.error(f"[{datetime.now()}] Не удалось инициализировать БД после {max_attempts} попыток")
     return False
