@@ -74,8 +74,10 @@ async def init_db():
 class User:
     @staticmethod
     async def create(telegram_id: int) -> bool:
+        global _pool
         if _pool is None:
-            raise RuntimeError("Пул соединений не инициализирован")
+            logger.info("Ленивая инициализация пула соединений...")
+            await init_db()
 
         async with _pool.acquire() as conn:
             try:

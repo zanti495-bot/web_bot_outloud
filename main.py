@@ -1,8 +1,9 @@
 import os
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 
-print("=== MAIN.PY VERSION 2026-01-31-v3 LOADED ===")   # ← добавь эту строку
+print("=== MAIN.PY VERSION 2026-01-31-v4 LOADED ===")
 print(f"Current commit: {os.environ.get('COMMIT_SHA', 'unknown')}")
 
 from flask import Flask, request, render_template_string
@@ -29,17 +30,15 @@ if not app_url:
 bot = Bot(token=bot_token)
 dp = Dispatcher()
 
-@asynccontextmanager
-async def lifespan(_app):
-    logger.info("Запуск инициализации...")
-    await init_db()
-    await set_webhook()
-    logger.info("Инициализация завершена")
-    yield
-    logger.info("Остановка приложения...")
+# Явная установка webhook при запуске worker'а (один раз)
+async def setup():
+    await init_db()               # инициализация БД
+    await set_webhook()           # установка webhook
+    logger.info("Startup completed: DB pool + webhook ready")
 
-# Регистрируем lifespan (gunicorn + uvicorn это поймут)
-app.config['LIFESPAN'] = lifespan
+# Запускаем setup асинхронно при импорте модуля (в контексте worker'а)
+loop = asyncio.get_event_loop()
+loop.create_task(setup())
 
 async def set_webhook():
     webhook_url = f"{app_url.rstrip('/')}/webhook"
@@ -73,14 +72,16 @@ async def start_handler(message):
         logger.error(f"Ошибка добавления пользователя в БД: {e}")
 
 @app.route('/webhook', methods=['POST'])
-async def webhook():
+def webhook():
     try:
         data = request.get_json(force=True)
         if not data:
             return 'Bad request', 400
 
         update = Update.model_validate(data)
-        await dp.feed_update(bot, update)
+        
+        # Запускаем обработку обновления асинхронно
+        asyncio.create_task(dp.feed_update(bot, update))
         return 'OK', 200
     except Exception as e:
         logger.error(f"Ошибка обработки webhook: {e}", exc_info=True)
