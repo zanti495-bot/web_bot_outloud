@@ -1,3 +1,9 @@
+try:
+    import psycopg2
+    print("psycopg2 успешно импортирован!")
+except ImportError as e:
+    print("psycopg2 НЕ установлен или не найден:", e)
+    raise
 import json
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, JSON, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
