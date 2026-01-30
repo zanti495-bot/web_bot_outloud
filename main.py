@@ -1,136 +1,94 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_file
 import os
-import io
-import pandas as pd
-from datetime import datetime
 import logging
-import asyncio
-import json
-from aiohttp import web
-from aiohttp.web_request import Request
-from aiohttp.web_response import Response
+from flask import Flask, request, jsonify, session, redirect, url_for, render_template
+from datetime import datetime
+from werkzeug.security import check_password_hash
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
-from werkzeug.security import check_password_hash, generate_password_hash
-from sqlalchemy import func
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# Logging setup
-logging.basicConfig(level=logging.DEBUG, format='[%(asctime)s] %(levelname)s: %(message)s')
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
 
 app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "Kjwje18J_kemfjcijwjnjfnkwnfkewjnl_k2i13ji2iuUUUWJDJ_Kfijwoejnf")
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "default_secret_change_me")
 
-# Bot setup (from bot.py)
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Handlers from bot.py
-@dp.message(Command("start"))
-async def start_handler(message: Message):
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="Открыть вопросы",
-                web_app=types.WebAppInfo(url=os.getenv('WEBHOOK_HOST', 'https://zanti495-bot-web-bot-outloud-3d66.twc1.net'))
-            )
-        ]
-    ])
-    await message.answer(
-        "Добро пожаловать! Нажмите кнопку ниже, чтобы открыть Mini App.",
-        reply_markup=keyboard
-    )
-
-@dp.message()
-async def echo(message: Message):
-    await message.reply("Привет! Это бот для рассылок. Используй /start.")
-
-# Broadcast function from bot.py
-async def send_broadcast(message_text: str):
-    from database import db, User  # Отложенный импорт
-    users = db.session.query(User.telegram_id).all()
-    for user_id in users:
-        try:
-            await bot.send_message(user_id[0], message_text)
-        except Exception as e:
-            logging.error(f"Failed to send message to {user_id[0]}: {e}")
-
-# Webhook settings
 WEBHOOK_HOST = os.getenv('WEBHOOK_HOST', 'https://zanti495-bot-web-bot-outloud-3d66.twc1.net')
 WEBHOOK_PATH = '/webhook'
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 
-# Health-check
-@app.route('/health')
-def health():
-    return 'OK', 200
+@dp.message(Command("start"))
+async def start_handler(message: types.Message):
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="Открыть вопросы", web_app=types.WebAppInfo(url=WEBHOOK_HOST))
+    ]])
+    await message.answer("Добро пожаловать! Нажми ниже.", reply_markup=keyboard)
 
-# Отложенная инициализация БД (чтобы избежать circular imports)
-with app.app_context():
+@dp.message()
+async def echo(message: types.Message):
+    await message.reply("Используй /start")
+
+async def send_broadcast(message_text: str):
+    from database import db, User  # отложенный импорт
+    users = db.session.query(User.telegram_id).all()
+    for uid in users:
+        try:
+            await bot.send_message(uid[0], message_text)
+        except Exception as e:
+            logging.error(f"Не удалось отправить {uid[0]}: {e}")
+
+# Webhook endpoint (async)
+@app.route(WEBHOOK_PATH, methods=['POST'])
+async def telegram_webhook():
+    update = types.Update.de_json(request.get_json(force=True))
+    await dp.feed_update(bot, update)
+    return jsonify(status="ok")
+
+# Установка webhook (вызови после деплоя: https://твой-домен/admin/set_webhook)
+@app.route('/admin/set_webhook')
+def admin_set_webhook():
+    if 'logged_in' not in session:
+        return redirect(url_for('admin_login'))
     try:
-        from database import init_db, db, Block, Question, User, View, Design, AuditLog, Purchase
-        if not init_db(max_attempts=10, delay=5):  # Увеличил попытки
-            logging.warning("DB init failed, but continuing...")
+        import asyncio
+        asyncio.run(bot.delete_webhook(drop_pending_updates=True))
+        asyncio.run(bot.set_webhook(WEBHOOK_URL))
+        return "Webhook установлен: " + WEBHOOK_URL
     except Exception as e:
-        logging.error(f"Failed to init DB: {e}")
+        return f"Ошибка: {str(e)}"
 
-# Admin routes (truncated for brevity, assume full code here as in original)
-# ... (вставьте полный код админ-роутов из вашего оригинального app.py, включая /admin/login, /admin, etc.)
+# Отложенная инициализация БД
+try:
+    from database import init_db, db, Block, Question, User, View, Design, AuditLog, Purchase
+    init_db(max_attempts=15, delay=4)
+    logging.info("БД инициализирована")
+except Exception as e:
+    logging.error(f"Ошибка инициализации БД: {e}")
 
-# API routes (full as in original)
-@app.route('/api/design')
-def api_design():
-    design = Design.query.first()
-    return jsonify(design.settings if design else {})
+# Твои остальные маршруты (admin, api и т.д.) — вставь сюда из предыдущих версий
+# Пример минимального admin login
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    from config import ADMIN_PASSWORD
+    if request.method == 'POST':
+        if request.form.get('password') == ADMIN_PASSWORD:
+            session['logged_in'] = True
+            return redirect('/admin')
+        return render_template('login.html', error='Неверный пароль')
+    return render_template('login.html')
 
-@app.route('/api/blocks')
-def api_blocks():
-    blocks = Block.query.all()
-    return jsonify([{'id': b.id, 'name': b.name, 'is_paid': b.is_paid, 'price': b.price} for b in blocks])
+@app.route('/admin')
+def admin():
+    if 'logged_in' not in session:
+        return redirect(url_for('admin_login'))
+    return "Админ-панель (добавь свои шаблоны и логику)"
 
-@app.route('/api/purchase', methods=['POST'])
-def api_purchase():
-    data = request.json
-    user_id = data['user_id']
-    block_id = data.get('block_id')  # None = все блоки
-    purchase = Purchase(user_id=user_id, block_id=block_id)
-    db.session.add(purchase)
-    db.session.commit()
-    return jsonify({'success': True})
-
-@app.route('/api/view', methods=['POST'])
-def api_view():
-    data = request.json
-    view = View(user_id=data['user_id'], question_id=data['question_id'])
-    db.session.add(view)
-    db.session.commit()
-    return jsonify({'success': True})
-
-# Index
 @app.route('/')
 def index():
     return app.send_static_file('index.html')
 
-# Webhook handler
-async def webhook_handler(request: Request) -> Response:
-    update = types.Update(**(await request.json()))
-    await dp.feed_update(bot, update)
-    return web.json_response({'status': 'ok'})
-
-# Startup: set webhook
-async def on_startup(aio_app):
-    try:
-        webhook = await bot.get_webhook_info()
-        if webhook.url != WEBHOOK_URL:
-            await bot.delete_webhook()  # Delete if conflict
-            await bot.set_webhook(WEBHOOK_URL)
-            logging.info(f"Webhook set to {WEBHOOK_URL}")
-    except Exception as e:
-        logging.error(f"Failed to set webhook: {e}")
-
 if __name__ == '__main__':
-    aiohttp_app = web.Application()
-    aiohttp_app.router.add_post(WEBHOOK_PATH, webhook_handler)
-    aiohttp_app.on_startup.append(on_startup)
-    web.run_app(aiohttp_app, host='0.0.0.0', port=int(os.getenv('PORT', 8080)))
+    app.run(host='0.0.0.0', port=8080)
