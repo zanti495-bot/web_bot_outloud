@@ -14,7 +14,7 @@ Base = declarative_base()
 # Пытаемся создать engine с отловом ошибок
 try:
     print(f"Попытка подключения к БД с URL: {config.DATABASE_URL}")
-    engine = create_engine(config.DATABASE_URL, echo=False)  # echo=True для отладки логов БД
+    engine = create_engine(config.DATABASE_URL, echo=False, connect_args={'sslmode': 'verify-full'})
     Session = sessionmaker(bind=engine)
     print("Engine успешно создан")
 except ArgumentError as e:
