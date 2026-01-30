@@ -1,102 +1,74 @@
-try:
-    import psycopg2
-    print("psycopg2 успешно импортирован!")
-except ImportError as e:
-    print("psycopg2 НЕ установлен или не найден:", e)
-    raise
-import json
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, JSON, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
-from datetime import datetime
-import config
-from sqlalchemy.exc import ArgumentError, OperationalError
-# SAImportError не нужен — используйте встроенный ImportError 
+from sqlalchemy import create_engine, Column, Integer, String, Text, Boolean, Float, DateTime, JSON, ForeignKey
+from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+from sqlalchemy.sql import func
+from config import DATABASE_URL
+import datetime
 
-engine = None
-Session = None
 Base = declarative_base()
+engine = create_engine(DATABASE_URL, echo=False)
+SessionLocal = sessionmaker(bind=engine)
 
-# Пытаемся создать engine с отловом ошибок
-try:
-    print(f"Попытка подключения к БД с URL: {config.DATABASE_URL}")
-    engine = create_engine(config.DATABASE_URL, echo=False, connect_args={'sslmode': 'verify-full'})
-    Session = sessionmaker(bind=engine)
-    print("Engine успешно создан")
-except ArgumentError as e:
-    print(f"Ошибка парсинга DATABASE_URL: {e}")
-    print("Проверьте формат URL в настройках Timeweb (должен начинаться с postgresql+psycopg://)")
-    raise
-except OperationalError as e:
-    print(f"Ошибка подключения к базе данных: {e}")
-    print("Возможные причины: неверный пароль, хост недоступен, БД не существует, или нужен/ненужен sslmode")
-    raise
-except SAImportError as e:
-    print(f"Ошибка импорта драйвера БД (psycopg или psycopg2 не установлен или не найден): {e}")
-    print("Убедитесь, что в requirements.txt есть psycopg и URL использует +psycopg")
-    raise
-except Exception as e:
-    print(f"Неизвестная ошибка при создании engine: {e}")
-    raise
-
-class Block(Base):
-    __tablename__ = 'blocks'
-    id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False)
-    description = Column(String)
-    is_paid = Column(Boolean, default=False)
-    price = Column(Integer, default=0)
-    sort_order = Column(Integer, default=0)
-    questions = relationship('Question', backref='block')
-
-class Question(Base):
-    __tablename__ = 'questions'
-    id = Column(Integer, primary_key=True)
-    block_id = Column(Integer, ForeignKey('blocks.id'), nullable=False)
-    text = Column(String, nullable=False)
-    sort_order = Column(Integer, default=0)
 
 class User(Base):
-    __tablename__ = 'users'
-    user_id = Column(Integer, primary_key=True)
-    username = Column(String)
-    first_name = Column(String)
-    purchased_blocks = Column(JSON, default=list)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    telegram_id = Column(Integer, unique=True, nullable=False, index=True)
+    username = Column(String(64))
+    first_name = Column(String(128))
+    last_name = Column(String(128))
+    is_blocked = Column(Boolean, default=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class Block(Base):
+    __tablename__ = "blocks"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text)
+    is_paid = Column(Boolean, default=False)
+    price = Column(Float, default=0.0)
+    questions = relationship("Question", back_populates="block", cascade="all, delete-orphan")
+
+
+class Question(Base):
+    __tablename__ = "questions"
+    id = Column(Integer, primary_key=True, index=True)
+    block_id = Column(Integer, ForeignKey("blocks.id"), nullable=False)
+    text = Column(Text, nullable=False)
+    order = Column(Integer, default=0)
+    block = relationship("Block", back_populates="questions")
+
 
 class View(Base):
-    __tablename__ = 'views'
+    __tablename__ = "views"
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.user_id'))
-    question_id = Column(Integer, ForeignKey('questions.id'))
-    viewed_at = Column(DateTime, default=datetime.utcnow)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    question_id = Column(Integer, ForeignKey("questions.id"), nullable=False)
+    viewed_at = Column(DateTime, server_default=func.now())
+
+
+class Purchase(Base):
+    __tablename__ = "purchases"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    block_id = Column(Integer, ForeignKey("blocks.id"), nullable=False)
+    purchased_at = Column(DateTime, server_default=func.now())
+
 
 class Design(Base):
-    __tablename__ = 'design'
+    __tablename__ = "design"
     id = Column(Integer, primary_key=True)
-    settings = Column(JSON, default=config.DEFAULT_DESIGN)
+    settings = Column(JSON, default=dict)  # {"bg": "#121212", "text": "#e0e0e0", "font": "system-ui"}
+
 
 class AuditLog(Base):
-    __tablename__ = 'audit_logs'
+    __tablename__ = "audit_log"
     id = Column(Integer, primary_key=True)
-    action = Column(String)
-    details = Column(String)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    admin_id = Column(Integer)  # telegram id
+    action = Column(String(255))
+    details = Column(Text)
+    created_at = Column(DateTime, server_default=func.now())
 
-# Создание таблиц
-try:
-    Base.metadata.create_all(engine)
-    print("Таблицы успешно созданы или уже существуют")
-except Exception as e:
-    print(f"Ошибка при создании таблиц: {e}")
 
-# Функции для работы с БД
-def get_session():
-    return Session()
-
-def add_audit_log(action, details):
-    session = get_session()
-    log = AuditLog(action=action, details=details)
-    session.add(log)
-    session.commit()
-    session.close()
+def init_db():
+    Base.metadata.create_all(bind=engine)
