@@ -1,0 +1,6 @@
+flask==3.0.3
+aiogram==3.13.1
+gunicorn==23.0.0
+uvicorn==0.30.6
+asyncpg==0.29.0
+asgiref==3.8.1
