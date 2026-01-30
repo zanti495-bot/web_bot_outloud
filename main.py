@@ -27,32 +27,49 @@ def setup_once():
     global setup_done
     if not setup_done:
         setup_done = True
-        asyncio.run(init_db())
-        asyncio.run(set_webhook())
+        try:
+            asyncio.run(init_db())
+            logger.info("База данных инициализирована успешно")
+        except Exception as e:
+            logger.error(f"Ошибка init_db: {e}", exc_info=True)
+
+        try:
+            asyncio.run(set_webhook())
+            logger.info("Webhook установлен")
+        except Exception as e:
+            logger.error(f"Ошибка webhook: {e}", exc_info=True)
 
 async def set_webhook():
     app_url = os.environ.get('APP_URL')
     if not app_url:
         logger.error("APP_URL не установлен!")
         return
+
     webhook_url = f"{app_url.rstrip('/')}/webhook"
     await bot.set_webhook(webhook_url)
-    logger.info(f"Webhook установлен: {webhook_url}")
+    logger.info(f"Webhook: {webhook_url}")
 
 @dp.message(Command("start"))
-async def start(message):
+async def start_handler(message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Открыть вопросы", web_app=WebAppInfo(url=f"{os.environ.get('APP_URL')}/miniapp"))]
+        [InlineKeyboardButton(
+            text="Открыть вопросы",
+            web_app=WebAppInfo(url=f"{os.environ.get('APP_URL')}/miniapp")
+        )]
     ])
     await message.answer("Добро пожаловать!", reply_markup=keyboard)
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    data = request.get_json(force=True)
-    update = Update.de_json(data, bot)
-    if update:
-        asyncio.run(dp.feed_update(bot, update))
-    return 'OK', 200
+    try:
+        data = request.get_json(force=True)
+        update = Update.de_json(data, bot)
+        if update:
+            asyncio.run(dp.feed_update(bot, update))
+        return 'OK', 200
+    except Exception as e:
+        logger.error(f"Webhook error: {e}", exc_info=True)
+        return 'Error', 500
 
 @app.route('/miniapp')
 def miniapp():
@@ -61,18 +78,27 @@ def miniapp():
     <html lang="ru">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Mini App</title>
         <script src="https://telegram.org/js/telegram-web-app.js"></script>
     </head>
-    <body>
+    <body style="font-family:sans-serif; padding:20px; background:#f0f2f5;">
         <h1>Привет из Mini App!</h1>
-        <p>User ID: <span id="uid">...</span></p>
+        <p><strong>User ID:</strong> <span id="uid">загружается...</span></p>
         <script>
-            const user = Telegram.WebApp.initDataUnsafe.user || {};
-            document.getElementById('uid').innerText = user.id || 'не получен';
+            const tg = window.Telegram.WebApp;
+            tg.ready();
+            tg.expand();
+            const user = tg.initDataUnsafe.user || {};
+            document.getElementById('uid').textContent = user.id || 'не получен';
         </script>
     </body>
     </html>
     ''')
+
+if __name__ == '__main__':
+    asyncio.run(init_db())
+    asyncio.run(set_webhook())
+    app.run(host='0.0.0.0', port=8000, debug=True)
 
 app = WsgiToAsgi(app)
