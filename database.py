@@ -4,7 +4,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 import config
-from sqlalchemy.exc import ArgumentError, OperationalError, ImportError as SAImportError  # Переименовал, чтобы не путать с built-in ImportError
+from sqlalchemy.exc import ArgumentError, OperationalError
+# SAImportError не нужен — используйте встроенный ImportError 
 
 engine = None
 Session = None
