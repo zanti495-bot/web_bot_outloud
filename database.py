@@ -1,9 +1,10 @@
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, DateTime, JSON, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, DatabaseError
 from datetime import datetime
 import os
+import time
 
 Base = declarative_base()
 
@@ -63,6 +64,47 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL не установлен в переменных окружения!")
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+# Добавляем параметр sslmode=disable — это решает проблему с root.crt на timeweb
+if "sslmode" not in DATABASE_URL:
+    if DATABASE_URL.startswith("postgresql://"):
+        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://")
+    DATABASE_URL += "?sslmode=disable"
+
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_recycle=3600,          # переподключение каждые 60 минут
+    pool_size=5,
+    max_overflow=10
+)
+
 Session = sessionmaker(bind=engine)
 db = Session()
+
+
+def init_db(max_attempts=5, delay=3):
+    """Безопасная инициализация таблиц с повторными попытками"""
+    attempt = 1
+    while attempt <= max_attempts:
+        try:
+            # Создаём таблицы в логическом порядке + checkfirst
+            User.__table__.create(bind=engine, checkfirst=True)
+            Block.__table__.create(bind=engine, checkfirst=True)
+            Question.__table__.create(bind=engine, checkfirst=True)
+            View.__table__.create(bind=engine, checkfirst=True)
+            Design.__table__.create(bind=engine, checkfirst=True)
+            AuditLog.__table__.create(bind=engine, checkfirst=True)
+            Purchase.__table__.create(bind=engine, checkfirst=True)
+            
+            print(f"[{datetime.now()}] Таблицы успешно созданы или уже существуют")
+            return True
+        except (OperationalError, DatabaseError) as e:
+            print(f"[{datetime.now()}] Попытка {attempt}/{max_attempts} — ошибка БД: {str(e)}")
+            if attempt < max_attempts:
+                time.sleep(delay)
+            attempt += 1
+        except Exception as e:
+            print(f"[{datetime.now()}] Неожиданная ошибка при создании таблиц: {str(e)}")
+            break
+    print(f"[{datetime.now()}] Не удалось инициализировать БД после {max_attempts} попыток")
+    return False
