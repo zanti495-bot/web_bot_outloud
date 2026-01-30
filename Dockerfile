@@ -1,18 +1,22 @@
-# Базовый образ - используем 3.12 как в runtime.txt, при необходимости смените на 3.14
+# Use 3.12 as in runtime.txt; change to 3.14 if needed
 FROM python:3.12-slim
 
 WORKDIR /app
 
-# Копируем и устанавливаем зависимости
+# Install system dependencies for psycopg2-binary
+RUN apt-get update -y && \
+    apt-get install -y libpq5 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy and install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем весь остальной код
+# Copy the rest of the code
 COPY . .
 
-# Порт - Timeweb задаёт $PORT автоматически
-# Дефолтное значение, если переменная не пришла
+# Port - fixed to 8080
 ENV PORT=8080
 
-# Запуск через Gunicorn
+# Run via Gunicorn
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "admin_panel:app"]
