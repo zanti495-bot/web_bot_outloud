@@ -18,7 +18,7 @@ async def start_handler(message: Message):
         [
             InlineKeyboardButton(
                 text="Открыть вопросы",
-                web_app=types.WebAppInfo(url="https://zanti495-bot-web-bot-outloud-3d66.twc1.net/")  # Замените на ваш реальный домен из timeweb.cloud App Platform
+                web_app=types.WebAppInfo(url="zanti495-bot-web-bot-outloud-3d66.twc1.net")  # Замените на ваш реальный домен из timeweb.cloud App Platform
             )
         ]
     ])
