@@ -12,11 +12,9 @@ _pool = None
 def get_dsn() -> str:
     raw_dsn = os.environ.get('DATABASE_URL')
     if not raw_dsn:
-        raise ValueError("DATABASE_URL не установлен в переменных окружения!")
+        raise ValueError("DATABASE_URL не установлен!")
 
     cert_path = '/app/ca.crt'
-
-    # Отладка сертификата — чтобы точно видеть в логах
     if os.path.exists(cert_path):
         size = os.path.getsize(cert_path)
         logger.info(f"ca.crt найден! Размер: {size} байт")
@@ -27,12 +25,11 @@ def get_dsn() -> str:
         except Exception as e:
             logger.warning(f"Не удалось прочитать ca.crt: {e}")
     else:
-        logger.error(f"ca.crt НЕ НАЙДЕН по пути {cert_path}!")
+        logger.error("ca.crt НЕ НАЙДЕН!")
 
     parsed = urlparse(raw_dsn)
     query_params = parse_qs(parsed.query)
 
-    # verify-ca — решает проблему IP address mismatch
     query_params['sslmode'] = ['verify-ca']
     query_params['sslrootcert'] = [cert_path]
 
@@ -40,14 +37,13 @@ def get_dsn() -> str:
     new_parsed = parsed._replace(query=new_query)
 
     dsn = urlunparse(new_parsed)
-    logger.info(f"DSN сформирован (sslmode=verify-ca)")
+    logger.info("DSN сформирован (sslmode=verify-ca)")
     return dsn
-
 
 async def init_db():
     global _pool
     if _pool is not None:
-        logger.info("Пул уже инициализирован")
+        logger.info("Пул уже создан")
         return
 
     dsn = get_dsn()
@@ -64,39 +60,32 @@ async def init_db():
         async with _pool.acquire() as conn:
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS users (
-                    id          SERIAL PRIMARY KEY,
+                    id SERIAL PRIMARY KEY,
                     telegram_id BIGINT UNIQUE NOT NULL,
-                    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
-            logger.info("Таблица users проверена / создана")
+            logger.info("Таблица users готова")
     except Exception as e:
         logger.exception("Ошибка init_db")
         raise
-
 
 class User:
     @staticmethod
     async def create(telegram_id: int) -> bool:
         if _pool is None:
-            raise RuntimeError("Пул не инициализирован. Вызовите init_db()")
+            raise RuntimeError("Пул не инициализирован")
 
         async with _pool.acquire() as conn:
             try:
-                result = await conn.execute(
-                    '''
-                    INSERT INTO users (telegram_id)
-                    VALUES ($1)
+                result = await conn.execute('''
+                    INSERT INTO users (telegram_id) VALUES ($1)
                     ON CONFLICT (telegram_id) DO NOTHING
-                    ''',
-                    telegram_id
-                )
+                ''', telegram_id)
                 inserted = result == "INSERT 0 1"
                 if inserted:
-                    logger.info(f"Добавлен новый пользователь: {telegram_id}")
-                else:
-                    logger.debug(f"Пользователь {telegram_id} уже существует")
+                    logger.info(f"Новый пользователь: {telegram_id}")
                 return inserted
             except Exception as e:
-                logger.error(f"Ошибка при добавлении пользователя {telegram_id}: {e}")
+                logger.error(f"Ошибка создания пользователя: {e}")
                 raise

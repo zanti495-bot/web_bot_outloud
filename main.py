@@ -6,7 +6,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Update, WebAppInfo
 from aiogram.filters import Command
 from asgiref.wsgi import WsgiToAsgi
-from database import init_db
+from database import init_db, User
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,27 +27,17 @@ def setup_once():
     global setup_done
     if not setup_done:
         setup_done = True
-        try:
-            asyncio.run(init_db())
-            logger.info("База данных инициализирована успешно")
-        except Exception as e:
-            logger.error(f"Ошибка init_db: {e}", exc_info=True)
-
-        try:
-            asyncio.run(set_webhook())
-            logger.info("Webhook установлен")
-        except Exception as e:
-            logger.error(f"Ошибка webhook: {e}", exc_info=True)
+        asyncio.run(init_db())
+        asyncio.run(set_webhook())
 
 async def set_webhook():
     app_url = os.environ.get('APP_URL')
     if not app_url:
         logger.error("APP_URL не установлен!")
         return
-
     webhook_url = f"{app_url.rstrip('/')}/webhook"
     await bot.set_webhook(webhook_url)
-    logger.info(f"Webhook: {webhook_url}")
+    logger.info(f"Webhook установлен: {webhook_url}")
 
 @dp.message(Command("start"))
 async def start_handler(message):
@@ -57,18 +47,23 @@ async def start_handler(message):
             web_app=WebAppInfo(url=f"{os.environ.get('APP_URL')}/miniapp")
         )]
     ])
-    await message.answer("Добро пожаловать!", reply_markup=keyboard)
+    await message.answer("Добро пожаловать!\nНажми кнопку ниже.", reply_markup=keyboard)
+
+    # Добавляем пользователя в БД
+    try:
+        await User.create(message.from_user.id)
+    except Exception as e:
+        logger.error(f"Ошибка добавления пользователя: {e}")
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     try:
         data = request.get_json(force=True)
-        update = Update.de_json(data, bot)
-        if update:
-            asyncio.run(dp.feed_update(bot, update))
+        update = Update.model_validate(data)
+        asyncio.run(dp.feed_update(bot, update))
         return 'OK', 200
     except Exception as e:
-        logger.error(f"Webhook error: {e}", exc_info=True)
+        logger.error(f"Ошибка в webhook: {e}", exc_info=True)
         return 'Error', 500
 
 @app.route('/miniapp')
