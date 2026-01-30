@@ -7,3 +7,4 @@ sqlalchemy[asyncio]==2.0.35
 sqlmodel==0.0.22
 fastapi-amis-admin==0.6.3
 pydantic==2.9.2
+pydantic-settings==2.5.3  # Добавлено для фикса импорта BaseSettings
