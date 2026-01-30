@@ -1,14 +1,9 @@
-import asyncio
 import os
 import logging
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 
-import asyncpg
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-_pool = None
 
 def get_dsn() -> str:
     raw_dsn = os.environ.get('DATABASE_URL')
@@ -16,7 +11,7 @@ def get_dsn() -> str:
         raise ValueError("DATABASE_URL не установлен!")
 
     cert_path = '/app/ca.crt'
-    
+
     if os.path.exists(cert_path):
         try:
             size = os.path.getsize(cert_path)
@@ -40,59 +35,3 @@ def get_dsn() -> str:
 
     logger.info(f"Сформированный DSN: {new_dsn}")
     return new_dsn
-
-async def init_db():
-    global _pool
-    if _pool is not None:
-        logger.info("Пул уже существует")
-        return
-
-    dsn = get_dsn()
-    try:
-        _pool = await asyncpg.create_pool(
-            dsn=dsn,
-            min_size=1,
-            max_size=10,
-            timeout=45,
-            command_timeout=60,
-        )
-        logger.info("Пул соединений успешно создан")
-
-        async with _pool.acquire() as conn:
-            await conn.execute('''
-                CREATE TABLE IF NOT EXISTS users (
-                    id SERIAL PRIMARY KEY,
-                    telegram_id BIGINT UNIQUE NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            ''')
-            logger.info("Таблица users проверена/создана")
-    except Exception as e:
-        logger.exception("Критическая ошибка при создании пула или таблицы")
-        raise
-
-class User:
-    @staticmethod
-    async def create(telegram_id: int) -> bool:
-        global _pool
-        if _pool is None:
-            logger.info("Ленивая инициализация пула соединений...")
-            await init_db()
-
-        async with _pool.acquire() as conn:
-            try:
-                result = await conn.execute(
-                    '''
-                    INSERT INTO users (telegram_id) 
-                    VALUES ($1)
-                    ON CONFLICT (telegram_id) DO NOTHING
-                    ''',
-                    telegram_id
-                )
-                inserted = result == "INSERT 0 1"
-                if inserted:
-                    logger.info(f"Добавлен новый пользователь: {telegram_id}")
-                return inserted
-            except Exception as e:
-                logger.error(f"Ошибка при добавлении пользователя {telegram_id}: {e}")
-                return False
