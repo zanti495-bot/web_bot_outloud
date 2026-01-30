@@ -77,7 +77,7 @@ async def start_handler(message):
 @app.route('/webhook', methods=['POST'])
 async def webhook():
     try:
-        data = await request.get_json()
+        data = request.get_json(force=True)          # ← без await
         if not data:
             return 'Bad request', 400
 
