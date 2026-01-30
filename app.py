@@ -6,7 +6,7 @@ import warnings
 
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic._migration")
 
-print("=== APP.PY VERSION 2026-02-01-v7 LOADED ===")
+print("=== APP.PY VERSION 2026-02-01-v9 LOADED ===")
 print(f"Current commit: {os.environ.get('COMMIT_SHA', 'unknown')}")
 print(f"APP_URL = {os.environ.get('APP_URL')}")
 print(f"BOT_TOKEN exists = {bool(os.environ.get('BOT_TOKEN'))}")
@@ -21,6 +21,7 @@ from aiogram.filters import Command
 
 from fastapi_amis_admin.amis_admin.admin import ModelAdmin as admin
 from fastapi_amis_admin.amis_admin.site import AdminSite
+
 from sqlmodel import SQLModel, Field, select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
@@ -144,7 +145,7 @@ async def miniapp_page():
 
 site = AdminSite(engine=engine, title="Админ-панель Квиза")
 
-class QuestionAdmin(admin.ModelAdmin):
+class QuestionAdmin(admin):
     page_schema = 'Вопросы'
     model = Question
     list_display = ['id', 'text', 'difficulty', 'is_active', 'correct_index']
@@ -162,8 +163,8 @@ class QuestionAdmin(admin.ModelAdmin):
     ]
 
 site.register_admin(QuestionAdmin)
-site.register_admin(admin.ModelAdmin(model=Category, page_schema='Категории'))
-site.register_admin(admin.ModelAdmin(model=BotSettings, page_schema='Настройки бота', list_display=['welcome_message', 'questions_per_day_limit', 'answer_timeout_seconds']))
+site.register_admin(admin(model=Category, page_schema='Категории'))
+site.register_admin(admin(model=BotSettings, page_schema='Настройки бота', list_display=['welcome_message', 'questions_per_day_limit', 'answer_timeout_seconds']))
 
 app.mount("/admin", site.router)
 
