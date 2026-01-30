@@ -1,4 +1,4 @@
-fastapi==0.115.4
+fastapi==0.100.1
 aiogram==3.13.1
 gunicorn==23.0.0
 uvicorn==0.30.6
@@ -6,5 +6,5 @@ asyncpg==0.29.0
 sqlalchemy[asyncio]==2.0.35
 sqlmodel==0.0.22
 fastapi-amis-admin==0.6.3
-pydantic==2.9.2
-pydantic-settings==2.5.2  # Исправлено на доступную версию
+pydantic==1.10.13
+pydantic-settings==2.5.2
