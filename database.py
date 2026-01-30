@@ -84,19 +84,11 @@ Session = sessionmaker(bind=engine)
 db = Session()
 
 def init_db(max_attempts=5, delay=3):
-    """Безопасная инициализация таблиц с повторными попытками и общей транзакцией"""
+    """Безопасная инициализация таблиц с повторными попытками"""
     attempt = 1
     while attempt <= max_attempts:
         try:
-            with engine.begin() as conn:  # Общая транзакция для всех creates
-                User.__table__.create(bind=conn, checkfirst=True)
-                Block.__table__.create(bind=conn, checkfirst=True)
-                Question.__table__.create(bind=conn, checkfirst=True)
-                View.__table__.create(bind=conn, checkfirst=True)
-                Design.__table__.create(bind=conn, checkfirst=True)
-                AuditLog.__table__.create(bind=conn, checkfirst=True)
-                Purchase.__table__.create(bind=conn, checkfirst=True)
-            
+            Base.metadata.create_all(engine, checkfirst=True)  # Автоматическая сортировка зависимостей
             print(f"[{datetime.now()}] Таблицы успешно созданы или уже существуют")
             return True
         except (OperationalError, DatabaseError) as e:
