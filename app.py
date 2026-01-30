@@ -12,11 +12,11 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "Kjwje18J_kemfjcijwjnjfnkwnfkewjn
 
 # Безопасная инициализация таблиц БД
 with app.app_context():
-    try:
-        Base.metadata.create_all(bind=engine)
-        print(f"[{datetime.now()}] Таблицы БД созданы или уже существуют")
-    except Exception as e:
-        print(f"[{datetime.now()}] Ошибка инициализации БД: {str(e)}")
+    from database import init_db
+    if not init_db(max_attempts=5, delay=3):
+        print(f"[{datetime.now()}] Критическая ошибка: БД не инициализирована. Приложение может работать некорректно.")
+    else:
+        print(f"[{datetime.now()}] Инициализация БД прошла успешно")
 
 # Health-check
 @app.route('/health')
