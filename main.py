@@ -1,13 +1,13 @@
 import os
 import logging
 from datetime import datetime
-from flask import Flask, request, jsonify, session, redirect, url_for, render_template, send_file
+from flask import Flask, request, jsonify, session, redirect, url_for, render_template
 from werkzeug.security import check_password_hash
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import asyncio
-import json
+from sqlalchemy import func
 
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
 
@@ -19,9 +19,10 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
+# Домен берём из переменной окружения или fallback
 WEBHOOK_HOST = os.getenv('WEBHOOK_HOST', 'https://zanti495-bot-web-bot-outloud-3d66.twc1.net')
 WEBHOOK_PATH = '/webhook'
-WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
+WEBHOOK_URL = f"{WEBHOOK_HOST.rstrip('/')}{WEBHOOK_PATH}"
 
 @dp.message(Command("start"))
 async def start_handler(message: types.Message):
@@ -63,7 +64,7 @@ async def telegram_webhook():
         logging.error(f"Ошибка в webhook: {e}")
         return jsonify(status="error"), 500
 
-# Установка webhook (вызвать после деплоя: /admin/set_webhook)
+# Установка webhook (вызвать после деплоя)
 @app.route('/admin/set_webhook')
 def admin_set_webhook():
     if 'logged_in' not in session:
@@ -75,7 +76,7 @@ def admin_set_webhook():
     except Exception as e:
         return f"Ошибка установки webhook: {str(e)}", 500
 
-# Инициализация БД (отложенная)
+# Отложенная инициализация БД
 try:
     from database import init_db, db, Block, Question, User, View, Design, AuditLog, Purchase
     init_db(max_attempts=15, delay=4)
@@ -83,7 +84,7 @@ try:
 except Exception as e:
     logging.error(f"Не удалось инициализировать БД при старте: {e}")
 
-# Админ-панель — авторизация
+# Админ — авторизация
 from config import ADMIN_PASSWORD
 
 @app.route('/admin/login', methods=['GET', 'POST'])
