@@ -2,7 +2,7 @@ aiogram==3.13.1
 flask==3.0.3
 gunicorn==23.0.0
 sqlalchemy==2.0.35
-psycopg==3.2.4
+psycopg2-binary==2.9.9   # ← это главное изменение, binary версия
 python-dotenv==1.0.1
 pandas==2.2.3
 werkzeug==3.0.6
