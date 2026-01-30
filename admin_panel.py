@@ -278,6 +278,10 @@ def api_create_invoice():
         buy_all_blocks(user_id)
     return jsonify({'ok': True, 'message': 'Покупка успешна (условно)'})  # Условная покупка
 
+@app.route('/health')
+def health():
+    return 'OK', 200
+
 # ====================== Запуск ======================
 #if __name__ == '__main__':
 #    app.run(host='0.0.0.0', port=5000)
