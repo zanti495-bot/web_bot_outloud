@@ -2,6 +2,7 @@ import asyncio
 import os
 import logging
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
+
 import asyncpg
 
 logging.basicConfig(level=logging.INFO)
@@ -15,35 +16,36 @@ def get_dsn() -> str:
         raise ValueError("DATABASE_URL не установлен!")
 
     cert_path = '/app/ca.crt'
+    
     if os.path.exists(cert_path):
-        size = os.path.getsize(cert_path)
-        logger.info(f"ca.crt найден! Размер: {size} байт")
         try:
+            size = os.path.getsize(cert_path)
+            logger.info(f"ca.crt найден, размер: {size} байт")
             with open(cert_path, 'r') as f:
-                first_line = f.readline().strip()
-                logger.info(f"Начало сертификата: {first_line}")
+                first = f.readline().strip()
+                logger.info(f"Первая строка сертификата: {first}")
         except Exception as e:
-            logger.warning(f"Не удалось прочитать ca.crt: {e}")
+            logger.error(f"Ошибка чтения ca.crt: {e}")
     else:
-        logger.error("ca.crt НЕ НАЙДЕН!")
+        logger.error("Файл ca.crt НЕ НАЙДЕН в /app/ !")
 
     parsed = urlparse(raw_dsn)
-    query_params = parse_qs(parsed.query)
+    query = parse_qs(parsed.query)
 
-    query_params['sslmode'] = ['verify-ca']
-    query_params['sslrootcert'] = [cert_path]
+    # Важно: используем hostname, а не IP
+    query['sslmode'] = ['verify-ca']
+    query['sslrootcert'] = [cert_path]
 
-    new_query = urlencode(query_params, doseq=True)
-    new_parsed = parsed._replace(query=new_query)
+    new_query = urlencode(query, doseq=True)
+    new_dsn = urlunparse(parsed._replace(query=new_query))
 
-    dsn = urlunparse(new_parsed)
-    logger.info("DSN сформирован (sslmode=verify-ca)")
-    return dsn
+    logger.info(f"Сформированный DSN: {new_dsn}")
+    return new_dsn
 
 async def init_db():
     global _pool
     if _pool is not None:
-        logger.info("Пул уже создан")
+        logger.info("Пул уже существует")
         return
 
     dsn = get_dsn()
@@ -52,10 +54,10 @@ async def init_db():
             dsn=dsn,
             min_size=1,
             max_size=10,
-            timeout=30,
+            timeout=45,
             command_timeout=60,
         )
-        logger.info("Пул соединений создан успешно")
+        logger.info("Пул соединений успешно создан")
 
         async with _pool.acquire() as conn:
             await conn.execute('''
@@ -63,29 +65,33 @@ async def init_db():
                     id SERIAL PRIMARY KEY,
                     telegram_id BIGINT UNIQUE NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
+                );
             ''')
-            logger.info("Таблица users готова")
+            logger.info("Таблица users проверена/создана")
     except Exception as e:
-        logger.exception("Ошибка init_db")
+        logger.exception("Критическая ошибка при создании пула или таблицы")
         raise
 
 class User:
     @staticmethod
     async def create(telegram_id: int) -> bool:
         if _pool is None:
-            raise RuntimeError("Пул не инициализирован")
+            raise RuntimeError("Пул соединений не инициализирован")
 
         async with _pool.acquire() as conn:
             try:
-                result = await conn.execute('''
-                    INSERT INTO users (telegram_id) VALUES ($1)
+                result = await conn.execute(
+                    '''
+                    INSERT INTO users (telegram_id) 
+                    VALUES ($1)
                     ON CONFLICT (telegram_id) DO NOTHING
-                ''', telegram_id)
+                    ''',
+                    telegram_id
+                )
                 inserted = result == "INSERT 0 1"
                 if inserted:
-                    logger.info(f"Новый пользователь: {telegram_id}")
+                    logger.info(f"Добавлен новый пользователь: {telegram_id}")
                 return inserted
             except Exception as e:
-                logger.error(f"Ошибка создания пользователя: {e}")
-                raise
+                logger.error(f"Ошибка при добавлении пользователя {telegram_id}: {e}")
+                return False
