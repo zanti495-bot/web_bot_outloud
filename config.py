@@ -8,7 +8,7 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 PAYMENT_PROVIDER_TOKEN = os.getenv('PAYMENT_PROVIDER_TOKEN')  # Не используется, т.к. покупки условные
 
 # Database
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql+psycopg://user:password@localhost/bot_outloud')  # Добавлен +psycopg для правильного драйвера
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql+psycopg2://user:password@localhost/bot_outloud')
 
 # Webhook
 WEBHOOK_HOST = os.getenv('WEBHOOK_HOST', 'https://yourdomain.com')
