@@ -42,7 +42,7 @@ async def start_handler(message: Message):
         ]
     ])
     await message.answer(
-        "Добро пожаловать! Нажмите кнопку ниже, чтобы открыть Mini App.",
+        "Добро пожаловать! Это бот для рассылок и Mini App. Нажмите кнопку ниже.",
         reply_markup=keyboard
     )
 
@@ -182,8 +182,7 @@ if __name__ == '__main__':
     aiohttp_app = web.Application()
     aiohttp_app.router.add_post(WEBHOOK_PATH, webhook_handler)
     aiohttp_app.on_startup.append(on_startup)
-    # Добавляем Flask маршруты в aiohttp (используем middleware)
-    @aiohttp_app.middleware
+    # Добавляем Flask маршруты в aiohttp (используем middlewares)
     async def flask_middleware(request, handler):
         with app.test_request_context():
             return await handler(request)
