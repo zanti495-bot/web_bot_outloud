@@ -32,7 +32,6 @@ def get_dsn() -> str:
     parsed = urlparse(raw_dsn)
     query = parse_qs(parsed.query)
 
-    # Важно: используем hostname, а не IP
     query['sslmode'] = ['verify-ca']
     query['sslrootcert'] = [cert_path]
 

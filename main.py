@@ -24,7 +24,7 @@ bot = Bot(token=bot_token)
 dp = Dispatcher()
 
 # --------------------------------------------------
-# Инициализация один раз при старте приложения
+# Инициализация один раз при старте
 # --------------------------------------------------
 async def startup():
     logger.info("Запуск инициализации...")
@@ -44,6 +44,9 @@ async def set_webhook():
         logger.info(f"Webhook успешно установлен: {webhook_url}")
     except Exception as e:
         logger.error(f"Ошибка установки webhook: {e}")
+
+# Вызываем startup один раз при старте приложения
+asyncio.create_task(startup())
 
 # --------------------------------------------------
 # Хэндлеры aiogram
@@ -72,12 +75,12 @@ async def start_handler(message):
         logger.error(f"Ошибка добавления пользователя в БД: {e}")
 
 # --------------------------------------------------
-# Вебхук — теперь асинхронный
+# Вебхук
 # --------------------------------------------------
 @app.route('/webhook', methods=['POST'])
 async def webhook():
     try:
-        data = request.get_json(force=True)          # ← без await
+        data = request.get_json(force=True)
         if not data:
             return 'Bad request', 400
 
@@ -89,7 +92,7 @@ async def webhook():
         return 'Error', 500
 
 # --------------------------------------------------
-# Страница Mini App
+# Mini App
 # --------------------------------------------------
 @app.route('/miniapp')
 def miniapp():
@@ -114,7 +117,6 @@ def miniapp():
             const user = tg.initDataUnsafe?.user || {};
             document.getElementById('uid').textContent = user.id || 'не удалось получить';
             
-            // Для отладки можно вывести весь initData
             console.log('Telegram WebApp initData:', tg.initDataUnsafe);
         </script>
     </body>
@@ -122,7 +124,7 @@ def miniapp():
     ''')
 
 # --------------------------------------------------
-# Запуск (только для локальной отладки)
+# Локальный запуск
 # --------------------------------------------------
 if __name__ == '__main__':
     asyncio.run(startup())
