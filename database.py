@@ -60,14 +60,12 @@ class Purchase(Base):
     __tablename__ = 'purchases'
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'))
-    block_id = Column(Integer, ForeignKey('blocks.id'), nullable=True)  # None для всех блоков
+    block_id = Column(Integer, ForeignKey('blocks.id'), nullable=True)
 
-# ENGINE из ENV
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    raise ValueError("DATABASE_URL не установлен в переменных окружения!")
+    raise ValueError("DATABASE_URL не установлен!")
 
-# Добавляем sslmode=verify-full и sslrootcert
 if "sslmode" not in DATABASE_URL:
     DATABASE_URL += "?sslmode=verify-full&sslrootcert=/root/.postgresql/root.crt"
 
@@ -87,20 +85,18 @@ Session = sessionmaker(bind=engine)
 db = Session()
 
 def init_db(max_attempts=15, delay=4):
-    """Безопасная инициализация таблиц с повторными попытками"""
     attempt = 1
     while attempt <= max_attempts:
         try:
-            Base.metadata.create_all(engine, checkfirst=True)  # Автоматическая сортировка зависимостей
+            Base.metadata.create_all(engine, checkfirst=True)
             logging.info(f"[{datetime.now()}] Таблицы успешно созданы или уже существуют")
             return True
         except (OperationalError, DatabaseError) as e:
-            logging.error(f"[{datetime.now()}] Попытка {attempt}/{max_attempts} — ошибка БД: {str(e)}")
-            if attempt < max_attempts:
-                time.sleep(delay)
+            logging.error(f"Попытка {attempt}/{max_attempts}: {str(e)}")
+            time.sleep(delay)
             attempt += 1
         except Exception as e:
-            logging.error(f"[{datetime.now()}] Неожиданная ошибка при создании таблиц: {str(e)}")
+            logging.error(f"Ошибка: {str(e)}")
             break
-    logging.error(f"[{datetime.now()}] Не удалось инициализировать БД после {max_attempts} попыток")
+    logging.error("Не удалось инициализировать БД")
     return False
