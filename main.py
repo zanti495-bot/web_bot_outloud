@@ -52,10 +52,7 @@ async def send_broadcast(message_text: str):
             logging.error(f"Не удалось отправить пользователю {uid[0]}: {e}")
     logging.info(f"Рассылка завершена. Отправлено: {success_count} из {len(users)}")
 
-# ──────────────────────────────────────────────
 # Telegram Webhook
-# ──────────────────────────────────────────────
-
 @app.route(WEBHOOK_PATH, methods=['POST'])
 async def telegram_webhook():
     try:
@@ -78,10 +75,7 @@ def admin_set_webhook():
     except Exception as e:
         return f"Ошибка установки webhook: {str(e)}", 500
 
-# ──────────────────────────────────────────────
 # Инициализация БД (отложенная)
-# ──────────────────────────────────────────────
-
 try:
     from database import init_db, db, Block, Question, User, View, Design, AuditLog, Purchase
     init_db(max_attempts=15, delay=4)
@@ -89,10 +83,7 @@ try:
 except Exception as e:
     logging.error(f"Не удалось инициализировать БД при старте: {e}")
 
-# ──────────────────────────────────────────────
 # Админ-панель — авторизация
-# ──────────────────────────────────────────────
-
 from config import ADMIN_PASSWORD
 
 @app.route('/admin/login', methods=['GET', 'POST'])
@@ -118,10 +109,7 @@ def login_required(f):
     wrapper.__name__ = f.__name__
     return wrapper
 
-# ──────────────────────────────────────────────
 # Админ — дашборд
-# ──────────────────────────────────────────────
-
 @app.route('/admin')
 @login_required
 def admin_dashboard():
@@ -135,10 +123,7 @@ def admin_dashboard():
     }
     return render_template('dashboard.html', stats=stats)
 
-# ──────────────────────────────────────────────
 # Блоки
-# ──────────────────────────────────────────────
-
 @app.route('/admin/blocks', methods=['GET', 'POST'])
 @login_required
 def admin_blocks():
@@ -168,10 +153,7 @@ def admin_questions(block_id):
     questions = Question.query.filter_by(block_id=block_id).all()
     return render_template('questions.html', block=block, questions=questions)
 
-# ──────────────────────────────────────────────
 # Дизайн
-# ──────────────────────────────────────────────
-
 @app.route('/admin/design', methods=['GET', 'POST'])
 @login_required
 def admin_design():
@@ -192,10 +174,7 @@ def admin_design():
         return redirect(url_for('admin_design'))
     return render_template('design.html', design=design or {})
 
-# ──────────────────────────────────────────────
 # Рассылка
-# ──────────────────────────────────────────────
-
 @app.route('/admin/broadcast', methods=['GET', 'POST'])
 @login_required
 def admin_broadcast():
@@ -207,10 +186,7 @@ def admin_broadcast():
             return render_template('broadcast.html', success=True)
     return render_template('broadcast.html')
 
-# ──────────────────────────────────────────────
 # Пользователи
-# ──────────────────────────────────────────────
-
 @app.route('/admin/users', methods=['GET', 'POST'])
 @login_required
 def admin_users():
@@ -247,10 +223,7 @@ def user_views(user_id):
     views = View.query.filter_by(user_id=user_id).order_by(View.timestamp.desc()).limit(10).all()
     return render_template('user_views.html', views=views)
 
-# ──────────────────────────────────────────────
 # Логи аудита
-# ──────────────────────────────────────────────
-
 @app.route('/admin/logs')
 @login_required
 def admin_logs():
@@ -265,10 +238,7 @@ def clear_logs():
     AuditLog.log("Очищены все логи аудита")
     return redirect(url_for('admin_logs'))
 
-# ──────────────────────────────────────────────
 # Аналитика
-# ──────────────────────────────────────────────
-
 @app.route('/admin/analytics')
 @login_required
 def admin_analytics():
@@ -281,10 +251,7 @@ def admin_analytics():
      .limit(5).all()
     return render_template('analytics.html', top_blocks=top_blocks)
 
-# ──────────────────────────────────────────────
 # API для Mini App
-# ──────────────────────────────────────────────
-
 @app.route('/api/design')
 def api_design():
     design = Design.query.first()
@@ -328,9 +295,6 @@ def api_view():
 def index():
     return app.send_static_file('index.html')
 
-# ──────────────────────────────────────────────
-# Запуск (только для локального тестирования)
-# ──────────────────────────────────────────────
-
+# Запуск только для локального тестирования
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8080)), debug=False)
