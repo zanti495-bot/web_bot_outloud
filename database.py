@@ -4,40 +4,36 @@ import logging
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 import asyncpg
 
-# Настраиваем логирование (будет видно в runtime-логах Timeweb)
+# Настраиваем логи — будет видно в консоли Timeweb
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Глобальный пул соединений
 _pool = None
 
-
 def get_dsn() -> str:
-    """
-    Формирует строку подключения с обязательными параметрами SSL для Timeweb Cloud.
-    """
     raw_dsn = os.environ.get('DATABASE_URL')
     if not raw_dsn:
-        raise ValueError("Переменная окружения DATABASE_URL не установлена!")
+        raise ValueError("DATABASE_URL не установлен в переменных окружения!")
 
-    # Отладка: проверяем наличие сертификата прямо здесь
     cert_path = '/app/ca.crt'
+
+    # Отладка сертификата — самое важное сейчас
     if os.path.exists(cert_path):
         size = os.path.getsize(cert_path)
-        logger.info(f"ca.crt найден в {cert_path}, размер: {size} байт")
+        logger.info(f"ca.crt найден! Путь: {cert_path}, размер: {size} байт")
         try:
             with open(cert_path, 'r') as f:
-                first_line = f.readline().strip()
-                logger.info(f"Первые строки сертификата: {first_line}")
-        except Exception as e:
-            logger.warning(f"Не удалось прочитать ca.crt: {e}")
+                first_lines = f.read(200).strip()
+                logger.info(f"Первые строки сертификата:\n{first_lines}")
+        except Exception as read_err:
+            logger.warning(f"Не удалось прочитать ca.crt: {read_err}")
     else:
-        logger.error(f"Критическая ошибка: ca.crt НЕ НАЙДЕН по пути {cert_path}!")
+        logger.error(f"КРИТИЧЕСКАЯ ОШИБКА: ca.crt НЕ НАЙДЕН по пути {cert_path}!")
 
     parsed = urlparse(raw_dsn)
     query_params = parse_qs(parsed.query)
 
-    # Обязательные параметры SSL для Timeweb PostgreSQL
     query_params['sslmode'] = ['verify-full']
     query_params['sslrootcert'] = [cert_path]
 
@@ -45,15 +41,14 @@ def get_dsn() -> str:
     new_parsed = parsed._replace(query=new_query)
 
     dsn = urlunparse(new_parsed)
-    logger.info(f"Сформированный DSN: {dsn}")
+    logger.info(f"Сформированный DSN (без пароля): {dsn.replace(raw_dsn.split('://')[1].split('@')[0], '***:***')}")
     return dsn
 
 
 async def init_db():
-    """Инициализация пула соединений и создание таблицы users"""
     global _pool
     if _pool is not None:
-        logger.info("Пул уже инициализирован, пропускаем")
+        logger.info("Пул уже создан, пропускаем повторную инициализацию")
         return
 
     dsn = get_dsn()
@@ -61,10 +56,9 @@ async def init_db():
         _pool = await asyncpg.create_pool(
             dsn=dsn,
             min_size=1,
-            max_size=10,           # для твоей конфигурации 1 CPU / 2 ГБ RAM достаточно
+            max_size=10,
             timeout=30,
             command_timeout=60,
-            logger=logger,
         )
         logger.info("Пул соединений с PostgreSQL успешно создан")
 
@@ -76,19 +70,15 @@ async def init_db():
                     created_at  TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
             ''')
-            logger.info("Таблица users проверена / создана успешно")
+            logger.info("Таблица users проверена / создана")
     except Exception as e:
-        logger.exception("Ошибка при инициализации базы данных")
+        logger.exception("Ошибка при создании пула или таблицы")
         raise
 
 
 class User:
     @staticmethod
     async def create(telegram_id: int) -> bool:
-        """
-        Добавляет пользователя, если его ещё нет.
-        Возвращает True, если вставка произошла (новый пользователь).
-        """
         if _pool is None:
             raise RuntimeError("Пул соединений не инициализирован. Вызовите init_db()")
 
@@ -104,19 +94,10 @@ class User:
                 )
                 inserted = result == "INSERT 0 1"
                 if inserted:
-                    logger.info(f"Создан новый пользователь: telegram_id = {telegram_id}")
+                    logger.info(f"Добавлен новый пользователь: {telegram_id}")
                 else:
                     logger.debug(f"Пользователь {telegram_id} уже существует")
                 return inserted
             except Exception as e:
-                logger.error(f"Ошибка при создании пользователя {telegram_id}: {e}")
+                logger.error(f"Ошибка при добавлении пользователя {telegram_id}: {e}")
                 raise
-
-
-# Опционально: функция закрытия пула (можно вызвать при shutdown, если нужно)
-async def close_db():
-    global _pool
-    if _pool is not None:
-        await _pool.close()
-        _pool = None
-        logger.info("Пул соединений закрыт")

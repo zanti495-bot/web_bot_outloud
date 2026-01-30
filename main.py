@@ -15,12 +15,12 @@ app = Flask(__name__)
 
 bot_token = os.environ.get('BOT_TOKEN')
 if not bot_token:
-    raise ValueError("BOT_TOKEN не установлен!")
+    raise ValueError("BOT_TOKEN не установлен в переменных окружения!")
 
 bot = Bot(token=bot_token)
 dp = Dispatcher()
 
-# Флаг для однократной инициализации
+# Флаг для выполнения init только один раз
 setup_done = False
 
 @app.before_request
@@ -30,14 +30,14 @@ def setup_once():
         setup_done = True
         try:
             asyncio.run(init_db())
-            logger.info("База данных инициализирована")
+            logger.info("База данных инициализирована успешно")
         except Exception as e:
-            logger.error(f"Ошибка init_db: {e}", exc_info=True)
+            logger.error(f"Ошибка при init_db: {e}", exc_info=True)
 
         try:
             asyncio.run(set_webhook())
         except Exception as e:
-            logger.error(f"Ошибка set_webhook: {e}", exc_info=True)
+            logger.error(f"Ошибка установки webhook: {e}", exc_info=True)
 
 async def set_webhook():
     app_url = os.environ.get('APP_URL')
@@ -47,7 +47,7 @@ async def set_webhook():
 
     webhook_url = f"{app_url.rstrip('/')}/webhook"
     await bot.set_webhook(webhook_url)
-    logger.info(f"Webhook установлен: {webhook_url}")
+    logger.info(f"Webhook успешно установлен на: {webhook_url}")
 
 @dp.message(Command("start"))
 async def start_handler(message):
@@ -57,7 +57,7 @@ async def start_handler(message):
             web_app=WebAppInfo(url=f"{os.environ.get('APP_URL')}/miniapp")
         )]
     ])
-    await message.answer("Добро пожаловать!", reply_markup=keyboard)
+    await message.answer("Добро пожаловать!\nНажми кнопку ниже.", reply_markup=keyboard)
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -68,7 +68,7 @@ def webhook():
             asyncio.run(dp.feed_update(bot, update))
         return 'OK', 200
     except Exception as e:
-        logger.error(f"Webhook error: {e}", exc_info=True)
+        logger.error(f"Ошибка в обработке webhook: {e}", exc_info=True)
         return 'Error', 500
 
 @app.route('/miniapp')
