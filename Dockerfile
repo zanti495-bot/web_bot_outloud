@@ -12,6 +12,9 @@ RUN apt-get update -y && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy root.crt for SSL verify-full
+COPY root.crt /root/.postgresql/root.crt
+
 # Copy the rest of the code
 COPY . .
 
