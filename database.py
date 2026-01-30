@@ -4,15 +4,29 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 import config
+from sqlalchemy.exc import ArgumentError, OperationalError
 
-from sqlalchemy.exc import ArgumentError
-try:
-    engine = create_engine(config.DATABASE_URL)
-except ArgumentError as e:
-    print(f"Ошибка в DATABASE_URL: {e}")
-    raise
+engine = None
+Session = None
 Base = declarative_base()
-Session = sessionmaker(bind=engine)
+
+# Пытаемся создать engine с отловом ошибок
+try:
+    print(f"Попытка подключения к БД с URL: {config.DATABASE_URL}")
+    engine = create_engine(config.DATABASE_URL, echo=False)  # echo=True для отладки, если нужно
+    Session = sessionmaker(bind=engine)
+    print("Engine успешно создан")
+except ArgumentError as e:
+    print(f"Ошибка парсинга DATABASE_URL: {e}")
+    print("Проверьте переменную окружения DATABASE_URL в настройках Timeweb")
+    raise
+except OperationalError as e:
+    print(f"Ошибка подключения к базе данных: {e}")
+    print("Возможные причины: неверный пароль, хост недоступен, БД не существует")
+    raise
+except Exception as e:
+    print(f"Неизвестная ошибка при создании engine: {e}")
+    raise
 
 class Block(Base):
     __tablename__ = 'blocks'
@@ -58,8 +72,12 @@ class AuditLog(Base):
     details = Column(String)
     timestamp = Column(DateTime, default=datetime.utcnow)
 
-# Создание таблиц
-Base.metadata.create_all(engine)
+# Создание таблиц (выполняется один раз при старте)
+try:
+    Base.metadata.create_all(engine)
+    print("Таблицы успешно созданы или уже существуют")
+except Exception as e:
+    print(f"Ошибка при создании таблиц: {e}")
 
 # Функции для работы с БД
 def get_session():
