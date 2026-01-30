@@ -2,8 +2,8 @@ aiogram==3.13.1
 flask==3.0.3
 gunicorn==23.0.0
 sqlalchemy==2.0.35
-psycopg2-binary==2.9.10
+psycopg[binary]==3.2.4  # новая версия, без сборки
 python-dotenv==1.0.1
 pandas==2.2.3
 werkzeug==3.0.6
-aiohttp==3.10.11  # явно указываем новую версию, чтобы избежать сборки
+aiohttp==3.10.11
