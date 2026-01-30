@@ -4,7 +4,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 import config
-from sqlalchemy.exc import ArgumentError, OperationalError
+from sqlalchemy.exc import ArgumentError, OperationalError, ImportError as SAImportError  # Переименовал, чтобы не путать с built-in ImportError
 
 engine = None
 Session = None
@@ -13,16 +13,20 @@ Base = declarative_base()
 # Пытаемся создать engine с отловом ошибок
 try:
     print(f"Попытка подключения к БД с URL: {config.DATABASE_URL}")
-    engine = create_engine(config.DATABASE_URL, echo=False)  # echo=True для отладки, если нужно
+    engine = create_engine(config.DATABASE_URL, echo=False)  # echo=True для отладки логов БД
     Session = sessionmaker(bind=engine)
     print("Engine успешно создан")
 except ArgumentError as e:
     print(f"Ошибка парсинга DATABASE_URL: {e}")
-    print("Проверьте переменную окружения DATABASE_URL в настройках Timeweb")
+    print("Проверьте формат URL в настройках Timeweb (должен начинаться с postgresql+psycopg://)")
     raise
 except OperationalError as e:
     print(f"Ошибка подключения к базе данных: {e}")
-    print("Возможные причины: неверный пароль, хост недоступен, БД не существует")
+    print("Возможные причины: неверный пароль, хост недоступен, БД не существует, или нужен/ненужен sslmode")
+    raise
+except SAImportError as e:
+    print(f"Ошибка импорта драйвера БД (psycopg или psycopg2 не установлен или не найден): {e}")
+    print("Убедитесь, что в requirements.txt есть psycopg и URL использует +psycopg")
     raise
 except Exception as e:
     print(f"Неизвестная ошибка при создании engine: {e}")
@@ -72,7 +76,7 @@ class AuditLog(Base):
     details = Column(String)
     timestamp = Column(DateTime, default=datetime.utcnow)
 
-# Создание таблиц (выполняется один раз при старте)
+# Создание таблиц
 try:
     Base.metadata.create_all(engine)
     print("Таблицы успешно созданы или уже существуют")
